@@ -3,9 +3,11 @@ from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import RandomizedSearchCV, KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score
+from scipy.stats import pearsonr
 import pandas as pd
 import numpy as np
-
+import tensorflow as tf
 
 class KernelRegressionModel:
     def __init__(self):
@@ -77,6 +79,9 @@ def main():
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     mse_scores = []
     mae_scores = []
+    huber_scores = []
+    pearson_scores = []
+    qwk_scores = []
 
     for train_index, test_index in kf.split(X):
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
@@ -95,11 +100,30 @@ def main():
         mae = np.mean(np.abs(predictions - y_test))
         mae_scores.append(mae)
 
+        #Calculate other evaluation scores
+        huber = tf.keras.losses.Huber(delta=1.0)
+        huber_loss = huber(y_test, predictions).numpy().mean()
+        pearson_corr, p_val = pearsonr(y_test, predictions)
+        predictions_rounded = np.round(predictions).astype(int)
+        y_test_rounded = np.round(y_test).astype(int)
+        qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic', labels=list(range(10)))
+
+        pearson_scores.append(pearson_corr)
+        huber_scores.append(huber_loss)
+        qwk_scores.append(qwk)
+
+
     # Calculate the average MSE and MAE across all folds
     average_mse = np.mean(mse_scores)
     average_mae = np.mean(mae_scores)
+    average_huber = np.mean(huber_scores)
+    average_pearson = np.mean(pearson_scores)
+    average_qwk = np.mean(qwk_scores)
     print(f'Average Mean Squared Error (5-Fold CV): {average_mse}')
     print(f'Average Mean Absolute Error (5-Fold CV): {average_mae}')
+    print(f'Average Huber Loss (5-Fold CV): {average_huber}')
+    print(f'Average Pearson Correlation (5-Fold CV): {average_pearson}')
+    print(f'Average QWK (5-Fold CV): {average_qwk}')
     
     # Calculate Quadratic Weighted Kappa
     # TODO Implement QWK calculation here

@@ -2,8 +2,11 @@ from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 import numpy as np
+import tensorflow as tf
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import KFold, RandomizedSearchCV
+from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score
+from scipy.stats import pearsonr
 import pandas as pd
 
 
@@ -52,7 +55,16 @@ def make_predictions(model, X):
 def evaluate_model(model, X, y):
     predictions = make_predictions(model, X)
     mse = mean_squared_error(y, predictions)
-    return mse
+    mae = mean_absolute_error(y_test, predictions)
+    huber = tf.keras.losses.Huber(delta=1.0)
+    huber_loss = huber(y_test, predictions).numpy().mean()
+    pearson_corr, p_val = pearsonr(y_test, predictions)
+    #QWK
+    predictions_rounded = np.round(predictions).astype(int)
+    y_test_rounded = np.round(y_test).astype(int)
+    qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic', labels=list(range(10)))
+
+    return mse, mae, huber_loss, pearson_corr, qwk, predictions
 
 if __name__ == "__main__":
     # Load and preprocess the data
@@ -67,6 +79,9 @@ if __name__ == "__main__":
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     mse_scores = []
     mae_scores = []
+    huber_scores = []
+    pearson_scores = []
+    qwk_scores = []
 
     for train_index, test_index in kf.split(X):
         # Split the data into training and testing sets
@@ -78,17 +93,23 @@ if __name__ == "__main__":
         predictions = make_predictions(best_model, X_test)
         
         # Evaluate the model on the testing set
-        mse = evaluate_model(y_test, predictions)
+        mse, mae, huber_loss, pearson_corr, qwk, predictions = evaluate_model(y_test, predictions)
         mse_scores.append(mse)
-        
-        # Calculate MAE for this fold
-        mae = np.mean(np.abs(y_test - predictions))
         mae_scores.append(mae)
+        huber_scores.append(huber_loss)
+        pearson_scores.append(pearson_corr)
+        qwk_scores.append(qwk)
 
     # Calculate the average MSE and MAE across all folds
     average_mse = np.mean(mse_scores)
     avg_mae = np.mean(mae_scores)
+    average_huber = np.mean(huber_scores)
+    average_pearson = np.mean(pearson_scores)
+    average_qwk = np.mean(qwk_scores)
     print(f'Average Mean Squared Error (5-Fold CV): {average_mse}')
     print(f'Average Mean Absolute Error (5-Fold CV): {avg_mae}')
+    print(f'Average Huber Loss (5-Fold CV): {average_huber}')
+    print(f'Average Pearson Correlation (5-Fold CV): {average_pearson}')
+    print(f'Average QWK (5-Fold CV): {average_qwk}')
     
     #TODO QWK
