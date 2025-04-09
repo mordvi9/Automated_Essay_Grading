@@ -172,5 +172,5 @@ feature_df = pd.DataFrame(features, columns=[
     'score'
 ])
 
-feature_df.to_csv("extracted_features.csv", index=False)
+feature_df.to_csv("./Extracted Features/extracted_features.csv", index=False)
 print("All features saved to extracted_features.csv")
