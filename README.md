@@ -1,7 +1,4 @@
 # Automatic_Essay_Grading_NLP2025
-NLP Project for 2025 Spring
-
-
 Packages required to run this project:
 
 pip install pandas spacy textstat scikit-learn sentence-transformers numpy
