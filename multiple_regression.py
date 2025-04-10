@@ -112,4 +112,3 @@ if __name__ == "__main__":
     print(f'Average Pearson Correlation (5-Fold CV): {average_pearson}')
     print(f'Average QWK (5-Fold CV): {average_qwk}')
     
-    #TODO QWK

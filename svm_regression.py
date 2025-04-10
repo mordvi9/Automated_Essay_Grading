@@ -6,7 +6,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import RandomizedSearchCV
-from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score 
+from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score
 from scipy.stats import pearsonr
 import numpy as np
 

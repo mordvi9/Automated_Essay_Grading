@@ -74,28 +74,35 @@ if __name__ == "__main__":
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     mse_scores = []
     mae_scores = []
+    huber_scores = []
+    pearson_scores = []
+    qwk_scores = []
 
-    # Perform cross-validation and calculate the average MSE and MAE
     for train_index, test_index in kf.split(X):
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
         
+        
         # Train the logistic regression model with hyperparameter tuning
         model = train_logistic_regression(X_train, y_train)
         
-        # Evaluate the model
-        mse, predictions = evaluate_model(model, X_test, y_test)
+         # Evaluate the model
+        mse, mae, huber_loss, pearson_corr, qwk, predictions = model.evaluate(X_test, y_test)
         mse_scores.append(mse)
-        
-        # Calculate MAE for this fold
-        mae = np.mean(np.abs(predictions - y_test))
         mae_scores.append(mae)
-    
+        huber_scores.append(huber_loss)
+        pearson_scores.append(pearson_corr)
+        qwk_scores.append(qwk)
+
     # Calculate the average MSE and MAE across all folds
     average_mse = np.mean(mse_scores)
     average_mae = np.mean(mae_scores)
+    average_huber = np.mean(huber_scores)
+    average_pearson = np.mean(pearson_scores)
+    average_qwk = np.mean(qwk_scores)
+
     print(f'Average Mean Squared Error (5-Fold CV): {average_mse}')
     print(f'Average Mean Absolute Error (5-Fold CV): {average_mae}')
-    
-    # Calculate Quadratic Weighted Kappa
-    # TODO Implement QWK calculation here
+    print(f'Average Huber Loss (5-Fold CV): {average_huber}')
+    print(f'Average Pearson Correlation (5-Fold CV): {average_pearson}')
+    print(f'Average QWK (5-Fold CV): {average_qwk}')
