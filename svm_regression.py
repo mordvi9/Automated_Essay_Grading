@@ -59,9 +59,12 @@ def preprocess_data(data):
     return data
 
 def main():
-    #TODO add more data and preprocessing steps
+    #Load and preprocess data
     data = load_data('./data/ielts_data.csv')
     data = preprocess_data(data)
+    
+    #load extracted features from feature_extract.py
+    features = load_data('.\Extracted Features\extracted_features.csv')
     
     #TODO Feature engineering
     X = data.drop('target_column', axis=1)  # Replace 'target_column' with the actual target column name

@@ -71,6 +71,9 @@ if __name__ == "__main__":
     data = load_data('./data/ielts_data.csv')
     data = preprocess_data(data)
     
+    #load extracted features from feature_extract.py
+    features = load_data('.\Extracted Features\extracted_features.csv')
+    
     # Feature engineering
     X = data.drop('target_column', axis=1)  # Replace 'target_column' with the actual target column name
     y = data['target_column']  # Replace 'target_column' with the actual target column name
