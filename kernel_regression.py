@@ -125,8 +125,6 @@ def main():
     print(f'Average Pearson Correlation (5-Fold CV): {average_pearson}')
     print(f'Average QWK (5-Fold CV): {average_qwk}')
     
-    # Calculate Quadratic Weighted Kappa
-    # TODO Implement QWK calculation here
 
 if __name__ == "__main__":
     main()
