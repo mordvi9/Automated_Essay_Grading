@@ -68,7 +68,7 @@ def evaluate_model(model, X, y):
 
 if __name__ == "__main__":
     # Load and preprocess the data
-    data = load_data('ielts_writing_dataset.csv')
+    data = load_data('./data/ielts_data.csv')
     data = preprocess_data(data)
     
     # Feature engineering

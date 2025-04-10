@@ -60,7 +60,7 @@ def preprocess_data(data):
 
 def main():
     #TODO add more data and preprocessing steps
-    data = load_data('ielts_writing_dataset.csv')
+    data = load_data('./data/ielts_data.csv')
     data = preprocess_data(data)
     
     #TODO Feature engineering
