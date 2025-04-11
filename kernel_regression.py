@@ -7,7 +7,11 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa
 from scipy.stats import pearsonr
 import pandas as pd
 import numpy as np
-import tensorflow as tf
+#import tensorflow as tf
+import warnings
+
+# Suppress all warnings
+warnings.filterwarnings("ignore")
 
 class KernelRegressionModel:
     def __init__(self):
@@ -65,15 +69,16 @@ def preprocess_data(data):
 
 def main():
     # Load and preprocess the dataset
-    data = load_data('./data/ielts_data.csv')
+    data = load_data('.\data\ielts_data.csv')
     data = preprocess_data(data)
     
     #load extracted features from feature_extract.py
     features = load_data('.\Extracted Features\extracted_features.csv')
+    merged_df=pd.merge(data, features, left_index=True, right_index=True)
     
     # Feature engineering
-    X = data.drop('target_column', axis=1)  # Replace 'target_column' with the actual target column name
-    y = data['target_column']  # Replace 'target_column' with the actual target column name
+    X = merged_df.drop('score', axis=1)  # Replace 'target_column' with the actual target column name
+    y = merged_df['score']  # Replace 'target_column' with the actual target column name
 
     # Initialize the model
     kernel_regression_model = KernelRegressionModel()
@@ -104,15 +109,15 @@ def main():
         mae_scores.append(mae)
 
         #Calculate other evaluation scores
-        huber = tf.keras.losses.Huber(delta=1.0)
-        huber_loss = huber(y_test, predictions).numpy().mean()
+        #huber = tf.keras.losses.Huber(delta=1.0)
+        #huber_loss = huber(y_test, predictions).numpy().mean()
         pearson_corr, p_val = pearsonr(y_test, predictions)
         predictions_rounded = np.round(predictions).astype(int)
         y_test_rounded = np.round(y_test).astype(int)
         qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic', labels=list(range(10)))
 
         pearson_scores.append(pearson_corr)
-        huber_scores.append(huber_loss)
+        #huber_scores.append(huber_loss)
         qwk_scores.append(qwk)
 
 

@@ -65,10 +65,11 @@ def main():
     
     #load extracted features from feature_extract.py
     features = load_data('.\Extracted Features\extracted_features.csv')
+    merged_df=pd.merge(data, features, left_index=True, right_index=True)
     
-    #TODO Feature engineering
-    X = data.drop('target_column', axis=1)  # Replace 'target_column' with the actual target column name
-    y = data['target_column']  # Replace 'target_column' with the actual target column name
+    # Feature engineering
+    X = merged_df.drop('score', axis=1)  # Replace 'target_column' with the actual target column name
+    y = merged_df['score']  # Replace 'target_column' with the actual target column name
 
     # Initialize the model
     svr_model = SupportVectorRegressionModel()

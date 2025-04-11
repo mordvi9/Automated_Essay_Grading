@@ -68,6 +68,7 @@ if __name__ == "__main__":
     
     #load extracted features from feature_extract.py
     features = load_data('.\Extracted Features\extracted_features.csv')
+    merged_df=pd.merge(data, features, left_index=True, right_index=True)
     
     #TODO Feature engineering
     X = data[['feature1', 'feature2', 'feature3']]  # Replace with actual feature columns
