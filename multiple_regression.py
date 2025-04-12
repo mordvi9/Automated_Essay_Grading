@@ -41,9 +41,8 @@ def hyperparameter_tuning_with_pipeline(X_train, y_train):
     Perform hyperparameter tuning using a pipeline.
     """
     param_grid = {
-        'regressor__fit_intercept': [True, False],
-        'regressor__normalize': [True, False]
-    }
+        'regressor__fit_intercept': [True, False]
+        }
     pipeline = create_pipeline()
     grid_search = RandomizedSearchCV(pipeline, param_grid, cv=5, scoring='neg_mean_squared_error')
     grid_search.fit(X_train, y_train)
@@ -68,15 +67,16 @@ def evaluate_model(model, X, y):
 
 if __name__ == "__main__":
     # Load and preprocess the data
-    data = load_data('./data/ielts_data.csv')
+    data = load_data(r'./data/ielts_data.csv')
     data = preprocess_data(data)
     
     #load extracted features from feature_extract.py
-    features = load_data('.\Extracted Features\extracted_features.csv')
+    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
+    #merged_df=pd.merge(data, features, left_index=True, right_index=True)
     
     # Feature engineering
-    X = data.drop('target_column', axis=1)  # Replace 'target_column' with the actual target column name
-    y = data['target_column']  # Replace 'target_column' with the actual target column name
+    X = features.drop('score', axis=1)  # Replace 'target_column' with the actual target column name
+    y = features['score']  # Replace 'target_column' with the actual target column name
     
     # Perform 5-fold cross-validation
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
@@ -96,7 +96,8 @@ if __name__ == "__main__":
         predictions = make_predictions(best_model, X_test)
         
         # Evaluate the model on the testing set
-        mse, mae, huber_loss, pearson_corr, qwk, predictions = evaluate_model(y_test, predictions)
+        mse, mae, huber_loss, pearson_corr, qwk, predictions = evaluate_model(best_model, X_test, y_test)
+        # Append the evaluation scores to the lists
         mse_scores.append(mse)
         mae_scores.append(mae)
         huber_scores.append(huber_loss)

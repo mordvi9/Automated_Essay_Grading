@@ -27,7 +27,6 @@ class NeuralNetworkPipeline:
         """
         Initialize the pipeline with hyperparameters for the neural network.
         """
-        #TODO add NLP features to the pipeline
         self.learning_rate = learning_rate
         self.epochs = epochs
         self.batch_size = batch_size
@@ -83,16 +82,16 @@ def preprocess_data(data):
 
 def main():
     #Load and preprocess data
-    data = load_data('./data/ielts_data.csv')
+    data = load_data(r'./data/ielts_data.csv')
     data = preprocess_data(data)
     
     #load extracted features from feature_extract.py
-    features = load_data('.\Extracted Features\extracted_features.csv')
+    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
     merged_df=pd.merge(data, features, left_index=True, right_index=True)
     
     # Feature engineering
-    X = merged_df.drop('score', axis=1)  # Replace 'target_column' with the actual target column name
-    y = merged_df['score']  # Replace 'target_column' with the actual target column name
+    X = features.drop('score', axis=1)  # Replace 'target_column' with the actual target column name
+    y = features['score']  # Replace 'target_column' with the actual target column name
 
     # Perform 5-fold cross-validation
     kf = KFold(n_splits=5, shuffle=True, random_state=42)

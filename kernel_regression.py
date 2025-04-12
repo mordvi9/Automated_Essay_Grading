@@ -7,6 +7,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa
 from scipy.stats import pearsonr
 import pandas as pd
 import numpy as np
+from sentence_transformers import SentenceTransformer
 #import tensorflow as tf
 import warnings
 
@@ -68,17 +69,30 @@ def preprocess_data(data):
     return data
 
 def main():
+    # Load SBERT model
+    sbert_model = SentenceTransformer('all-MiniLM-L6-v2')
+    print("SBERT model loaded successfully.")
+    
     # Load and preprocess the dataset
-    data = load_data('.\data\ielts_data.csv')
-    data = preprocess_data(data)
+    data = load_data(r'.\data\ielts_data.csv')
+    print("Data loaded successfully.")
+    # Batch encode essays and prompts
+    data['essay_embedding'] = list(sbert_model.encode(data['clean_essay'].astype(str).tolist(), batch_size=32, show_progress_bar=True))
+    data['prompt_embedding'] = list(sbert_model.encode(data['clean_prompt'].astype(str).tolist(), batch_size=32, show_progress_bar=True))
+    data=data[data['essay_embedding', 'prompt_embedding']]
+    print(data)
     
     #load extracted features from feature_extract.py
-    features = load_data('.\Extracted Features\extracted_features.csv')
+    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
     merged_df=pd.merge(data, features, left_index=True, right_index=True)
+    print("Merge successful.")
     
     # Feature engineering
-    X = merged_df.drop('score', axis=1)  # Replace 'target_column' with the actual target column name
-    y = merged_df['score']  # Replace 'target_column' with the actual target column name
+    
+    # Combine extracted features with embeddings
+    X = features.drop(columns=['score'])
+    y = features['score']
+    print("Feature engineering successful.")
 
     # Initialize the model
     kernel_regression_model = KernelRegressionModel()
