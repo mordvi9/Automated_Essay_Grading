@@ -1,12 +1,12 @@
 import pandas as pd
 from xgboost import XGBRegressor
-from sklearn.model_selection import KFold, RandomizedSearchCV
-from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score
+from sklearn.model_selection import KFold
+from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score, precision_score, recall_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import pearsonr
 import numpy as np
-import tensorflow as tf
+import optuna
 
 
 def load_data(filepath):
@@ -23,30 +23,49 @@ def preprocess_data(data):
     data = data.dropna()  # Drop rows with missing values
     return data
 
-def create_pipeline():
+def create_pipeline(params):
     """
-    Create a pipeline for preprocessing and training the XGBRegressor model.
+    Create a pipeline for preprocessing and training the XGBRegressor model with given parameters.
     """
     pipeline = Pipeline([
         ('scaler', StandardScaler()),  # Standardize the features
-        ('regressor', XGBRegressor(objective='reg:squarederror', random_state=42))  # XGBoost regression model
+        ('regressor', XGBRegressor(
+            objective='reg:squarederror',
+            random_state=42,
+            n_estimators=params['n_estimators'],
+            learning_rate=params['learning_rate'],
+            max_depth=params['max_depth'],
+            subsample=params['subsample'],
+            colsample_bytree=params['colsample_bytree'],
+            gamma=params['gamma']
+        ))
     ])
     return pipeline
 
-def train_xgboost_regressor(X, y):
+def objective(trial, X_train, y_train, X_test, y_test):
     """
-    Perform hyperparameter tuning using a pipeline with XGBRegressor.
+    Objective function for Optuna to optimize hyperparameters based on QWK.
     """
-    pipeline = create_pipeline()
-    param_grid = {
-        'regressor__n_estimators': [50, 100, 200],
-        'regressor__learning_rate': [0.01, 0.1, 0.2],
-        'regressor__max_depth': [3, 5, 7],
-        'regressor__subsample': [0.8, 1.0]
+    params = {
+        'n_estimators': trial.suggest_int('n_estimators', 50, 500),
+        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.2),
+        'max_depth': trial.suggest_int('max_depth', 3, 10),
+        'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+        'gamma': trial.suggest_float('gamma', 0, 5)
     }
-    grid_search = RandomizedSearchCV(pipeline, param_grid, cv=5, scoring='neg_mean_squared_error', n_iter=10, random_state=42, n_jobs=-1)
-    grid_search.fit(X, y)
-    return grid_search.best_estimator_
+
+    pipeline = create_pipeline(params)
+    pipeline.fit(X_train, y_train)
+    predictions = pipeline.predict(X_test)
+    predictions_rounded = np.round(predictions).astype(int)
+    y_test_rounded = np.round(y_test).astype(int)
+    
+    # Calculate QWK
+    qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic')
+    
+    # Return negative QWK to minimize
+    return -qwk
 
 def make_predictions(model, X):
     """
@@ -56,19 +75,35 @@ def make_predictions(model, X):
 
 def evaluate_model(model, X, y):
     """
-    Evaluate the model using MSE, MAE, Huber Loss, Pearson Correlation, and QWK.
+    Evaluate the model using RMSE, MAE, Pearson Correlation, QWK, Precision, and Recall.
     """
     predictions = make_predictions(model, X)
-    mse = mean_squared_error(y, predictions)
+    mse = np.sqrt(mean_squared_error(y, predictions))
     mae = mean_absolute_error(y, predictions)
-    huber = tf.keras.losses.Huber(delta=1.0)
-    huber_loss = huber(y, predictions).numpy().mean()
     pearson_corr, _ = pearsonr(y, predictions)
+
+    # Round predictions and true values to the nearest integer
     predictions_rounded = np.round(predictions).astype(int)
     y_test_rounded = np.round(y).astype(int)
-    qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic')
 
-    return mse, mae, huber_loss, pearson_corr, qwk, predictions
+    # Map rounded values to discrete labels
+    unique_values = np.unique(np.concatenate([y_test_rounded, predictions_rounded]))
+    value_to_label = {value: idx for idx, value in enumerate(unique_values)}
+    y_test_labels = np.array([value_to_label[val] for val in y_test_rounded])
+    predictions_labels = np.array([value_to_label[val] for val in predictions_rounded])
+
+    # Calculate QWK
+    qwk = cohen_kappa_score(y_test_labels, predictions_labels, weights='quadratic')
+
+    # Calculate precision and recall based on "within 2 points" logic
+    y_test_within_5 = (np.abs(y - predictions) <= 0.5).astype(int)  # 1 if within 2 points, 0 otherwise
+    predictions_within_5 = (np.abs(predictions - y) <= 0.5).astype(int)  # 1 if within 2 points, 0 otherwise
+
+    precision = precision_score(y_test_within_5, predictions_within_5, average='binary', zero_division=0)
+    recall = recall_score(y_test_within_5, predictions_within_5, average='binary', zero_division=0)
+
+    return mse, mae, pearson_corr, qwk, precision, recall, predictions
+
 
 if __name__ == "__main__":
     # Load and preprocess the data
@@ -78,42 +113,57 @@ if __name__ == "__main__":
     # Load extracted features from feature_extract.py
     features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
     
+    # Scale the score column to be out of 100
+    features['score'] = features['score'] * (100 / 12)
+    
     # Feature engineering
     X = features.drop('score', axis=1)  # Replace 'score' with the actual target column name
     y = features['score']  # Replace 'score' with the actual target column name
     
     # Perform 5-fold cross-validation
-    kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    mse_scores = []
+    folds = 5
+    kf = KFold(n_splits=folds, shuffle=True, random_state=42)
+    rmse_scores = []
     mae_scores = []
-    huber_scores = []
     pearson_scores = []
     qwk_scores = []
+    precision_scores = []
+    recall_scores = []
 
     for train_index, test_index in kf.split(X):
+        print(f"Fold {train_index}...")
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
         
-        # Train the XGBoost regressor with hyperparameter tuning
-        model = train_xgboost_regressor(X_train, y_train)
+        # Use Optuna for Bayesian Optimization
+        study = optuna.create_study(direction='minimize')
+        study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test), n_trials=20)
+
+        # Get the best parameters and train the final model
+        best_params = study.best_params
+        final_pipeline = create_pipeline(best_params)
+        final_pipeline.fit(X_train, y_train)
         
         # Evaluate the model
-        mse, mae, huber_loss, pearson_corr, qwk, predictions = evaluate_model(model, X_test, y_test)
-        mse_scores.append(mse)
+        rmse, mae, pearson_corr, qwk, precision, recall, predictions = evaluate_model(final_pipeline, X_test, y_test)
+        rmse_scores.append(rmse)
         mae_scores.append(mae)
-        huber_scores.append(huber_loss)
         pearson_scores.append(pearson_corr)
         qwk_scores.append(qwk)
+        precision_scores.append(precision)
+        recall_scores.append(recall)
 
     # Calculate the average metrics across all folds
-    average_mse = np.mean(mse_scores)
+    average_rmse = np.mean(rmse_scores)
     average_mae = np.mean(mae_scores)
-    average_huber = np.mean(huber_scores)
     average_pearson = np.mean(pearson_scores)
     average_qwk = np.mean(qwk_scores)
+    average_precision = np.mean(precision_scores)
+    average_recall = np.mean(recall_scores)
 
-    print(f'Average Mean Squared Error (5-Fold CV): {average_mse}')
-    print(f'Average Mean Absolute Error (5-Fold CV): {average_mae}')
-    print(f'Average Huber Loss (5-Fold CV): {average_huber}')
-    print(f'Average Pearson Correlation (5-Fold CV): {average_pearson}')
-    print(f'Average QWK (5-Fold CV): {average_qwk}')
+    print(f'Average Root Mean Squared Error ({folds}-Fold CV): {average_rmse}')
+    print(f'Average Mean Absolute Error ({folds}-Fold CV): {average_mae}')
+    print(f'Average Pearson Correlation ({folds}-Fold CV): {average_pearson}')
+    print(f'Average QWK ({folds}-Fold CV): {average_qwk}')
+    print(f'Average Precision ({folds}-Fold CV): {average_precision}')
+    print(f'Average Recall ({folds}-Fold CV): {average_recall}')
