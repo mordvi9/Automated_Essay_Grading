@@ -78,7 +78,7 @@ def evaluate_model(model, X, y):
     Evaluate the model using RMSE, MAE, Pearson Correlation, QWK, Precision, and Recall.
     """
     predictions = make_predictions(model, X)
-    mse = np.sqrt(mean_squared_error(y, predictions))
+    rmse = np.sqrt(mean_squared_error(y, predictions))
     mae = mean_absolute_error(y, predictions)
     pearson_corr, _ = pearsonr(y, predictions)
 
@@ -96,13 +96,17 @@ def evaluate_model(model, X, y):
     qwk = cohen_kappa_score(y_test_labels, predictions_labels, weights='quadratic')
 
     # Calculate precision and recall based on "within 2 points" logic
-    y_test_within_5 = (np.abs(y - predictions) <= 0.5).astype(int)  # 1 if within 2 points, 0 otherwise
-    predictions_within_5 = (np.abs(predictions - y) <= 0.5).astype(int)  # 1 if within 2 points, 0 otherwise
+    
+    # Calculate binary labels for ground truth and predictions
+    within_2 = (np.abs(predictions_labels - y_test_labels) <= 2).astype(int)  # 1 if within 2 points, 0 otherwise
 
-    precision = precision_score(y_test_within_5, predictions_within_5, average='binary', zero_division=0)
-    recall = recall_score(y_test_within_5, predictions_within_5, average='binary', zero_division=0)
+    # Ground truth: All true values are "correct" (1) since we're evaluating predictions against them
+    ground_truth = np.ones_like(within_2)  # All true values are "correct" (1)
 
-    return mse, mae, pearson_corr, qwk, precision, recall, predictions
+    # Precision and Recall
+    precision = precision_score(ground_truth, within_2, average='binary', zero_division=0)
+    recall = recall_score(ground_truth, within_2, average='binary', zero_division=0)
+    return rmse, mae, pearson_corr, qwk, precision, recall, predictions
 
 
 if __name__ == "__main__":
@@ -114,7 +118,7 @@ if __name__ == "__main__":
     features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
     
     # Scale the score column to be out of 100
-    features['score'] = features['score'] * (100 / 12)
+    features['score'] = features['score'] * (100/9)
     
     # Feature engineering
     X = features.drop('score', axis=1)  # Replace 'score' with the actual target column name
