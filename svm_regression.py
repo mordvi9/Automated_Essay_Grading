@@ -38,13 +38,14 @@ class SupportVectorRegressionModel:
         """
         Objective function for Optuna to optimize SVR hyperparameters.
         """
-        # Define the hyperparameter search space
+    # Define the hyperparameter search space
         kernel = trial.suggest_categorical('kernel', ['linear', 'rbf'])
-        C = trial.suggest_float('C', 1, 100, log=True)
-        epsilon = trial.suggest_float('epsilon', 0.1, 1.0)
+        C = trial.suggest_float('C', 1, 100, log=True)  # Regularization parameter
+        epsilon = trial.suggest_float('epsilon', 0.1, 1.0)  # Epsilon in the epsilon-SVR model
+        gamma = trial.suggest_float('gamma', 1e-4, 1e-1, log=True) if kernel == 'rbf' else 'scale'
 
         # Create the SVR model with the suggested hyperparameters
-        model = make_pipeline(StandardScaler(), SVR(kernel=kernel, C=C, epsilon=epsilon))
+        model = make_pipeline(StandardScaler(), SVR(kernel=kernel, C=C, epsilon=epsilon, gamma=gamma))
 
         # Train the model
         model.fit(X_train, y_train)
@@ -72,7 +73,8 @@ class SupportVectorRegressionModel:
         logging.info(f"Best hyperparameters: {best_params}")
 
         # Train the final model with the best hyperparameters
-        self.model = make_pipeline(StandardScaler(), SVR(kernel=best_params['kernel'], C=best_params['C'], epsilon=best_params['epsilon']))
+        gamma = best_params['gamma'] if best_params['kernel'] == 'rbf' else 'scale'
+        self.model = make_pipeline(StandardScaler(), SVR(kernel=best_params['kernel'], C=best_params['C'], epsilon=best_params['epsilon'], gamma=gamma))
         self.model.fit(X_train, y_train)
 
         end_time = time.time()
