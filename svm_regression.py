@@ -155,7 +155,7 @@ def main():
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
         # Train and evaluate the model using Optuna
-        svr_model.train(X_train, y_train, X_test, y_test, n_trials=20)
+        svr_model.train(X_train, y_train, X_test, y_test, n_trials=35)
         rmse, mae, pearson_corr, qwk, precision, recall = svr_model.evaluate(X_test, y_test)
         rmse_scores.append(rmse)
         mae_scores.append(mae)

@@ -4,6 +4,7 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score, precision_score, recall_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import RFE
 from scipy.stats import pearsonr
 import numpy as np
 import optuna
@@ -16,6 +17,7 @@ def load_data(filepath):
     data = pd.read_csv(filepath)
     return data
 
+
 def preprocess_data(data):
     """
     Preprocess the data by handling missing values, encoding categorical variables, etc.
@@ -23,28 +25,31 @@ def preprocess_data(data):
     data = data.dropna()  # Drop rows with missing values
     return data
 
-def create_pipeline(params):
+
+def create_pipeline(params, n_features):
     """
-    Create a pipeline for preprocessing and training the XGBRegressor model with given parameters.
+    Create a pipeline for preprocessing and feature selection.
     """
+    regressor = XGBRegressor(
+        objective='reg:squarederror',
+        random_state=42,
+        n_estimators=params['n_estimators'],
+        learning_rate=params['learning_rate'],
+        max_depth=params['max_depth'],
+        subsample=params['subsample'],
+        colsample_bytree=params['colsample_bytree'],
+        gamma=params['gamma'],
+        reg_alpha=params['reg_alpha'],  # L1 regularization
+        reg_lambda=params['reg_lambda']  # L2 regularization
+    )
     pipeline = Pipeline([
         ('scaler', StandardScaler()),  # Standardize the features
-        ('regressor', XGBRegressor(
-            objective='reg:squarederror',
-            random_state=42,
-            n_estimators=params['n_estimators'],
-            learning_rate=params['learning_rate'],
-            max_depth=params['max_depth'],
-            subsample=params['subsample'],
-            colsample_bytree=params['colsample_bytree'],
-            gamma=params['gamma'],
-            reg_alpha=params['reg_alpha'],  # L1 regularization
-            reg_lambda=params['reg_lambda']  # L2 regularization
-        ))
+        ('feature_selector', RFE(regressor, n_features_to_select=n_features))  # Feature selection
     ])
-    return pipeline
+    return pipeline, regressor
 
-def objective(trial, X_train, y_train, X_test, y_test):
+
+def objective(trial, X_train, y_train, X_test, y_test, n_features):
     """
     Objective function for Optuna to optimize hyperparameters based on QWK.
     """
@@ -59,9 +64,18 @@ def objective(trial, X_train, y_train, X_test, y_test):
         'reg_lambda': trial.suggest_float('reg_lambda', 0, 10)  # L2 regularization
     }
 
-    pipeline = create_pipeline(params)
-    pipeline.fit(X_train, y_train)
-    predictions = pipeline.predict(X_test)
+    # Create pipeline and regressor
+    pipeline, regressor = create_pipeline(params, n_features)
+
+    # Preprocess the data using the pipeline (scaling and feature selection)
+    X_train_transformed = pipeline.fit_transform(X_train, y_train)
+    X_test_transformed = pipeline.transform(X_test)
+
+    # Train the regressor without early stopping
+    regressor.fit(X_train_transformed, y_train)
+
+    # Make predictions
+    predictions = regressor.predict(X_test_transformed)
     predictions_rounded = np.round(predictions).astype(int)
     y_test_rounded = np.round(y_test).astype(int)
     
@@ -76,6 +90,7 @@ def make_predictions(model, X):
     Make predictions using the trained model.
     """
     return model.predict(X)
+
 
 def evaluate_model(model, X, y):
     """
@@ -100,14 +115,9 @@ def evaluate_model(model, X, y):
     qwk = cohen_kappa_score(y_test_labels, predictions_labels, weights='quadratic')
 
     # Calculate precision and recall based on "within 2 points" logic
-    
-    # Calculate binary labels for ground truth and predictions
     within_2 = (np.abs(predictions_labels - y_test_labels) <= 2).astype(int)  # 1 if within 2 points, 0 otherwise
-
-    # Ground truth: All true values are "correct" (1) since we're evaluating predictions against them
     ground_truth = np.ones_like(within_2)  # All true values are "correct" (1)
 
-    # Precision and Recall
     precision = precision_score(ground_truth, within_2, average='binary', zero_division=0)
     recall = recall_score(ground_truth, within_2, average='binary', zero_division=0)
     return rmse, mae, pearson_corr, qwk, precision, recall, predictions
@@ -138,22 +148,29 @@ if __name__ == "__main__":
     precision_scores = []
     recall_scores = []
 
+    n_features = 10  # Number of features to select
+
     for train_index, test_index in kf.split(X):
-        print(f"Fold {train_index}...")
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
         
         # Use Optuna for Bayesian Optimization
         study = optuna.create_study(direction='minimize')
-        study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test), n_trials=20)
+        study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test, n_features), n_trials=35)
 
         # Get the best parameters and train the final model
         best_params = study.best_params
-        final_pipeline = create_pipeline(best_params)
-        final_pipeline.fit(X_train, y_train)
+        pipeline, regressor = create_pipeline(best_params, n_features)
+
+        # Preprocess the data
+        X_train_transformed = pipeline.fit_transform(X_train, y_train)
+        X_test_transformed = pipeline.transform(X_test)
+
+        # Train the final model without early stopping
+        regressor.fit(X_train_transformed, y_train)
         
         # Evaluate the model
-        rmse, mae, pearson_corr, qwk, precision, recall, predictions = evaluate_model(final_pipeline, X_test, y_test)
+        rmse, mae, pearson_corr, qwk, precision, recall, predictions = evaluate_model(regressor, X_test_transformed, y_test)
         rmse_scores.append(rmse)
         mae_scores.append(mae)
         pearson_scores.append(pearson_corr)
