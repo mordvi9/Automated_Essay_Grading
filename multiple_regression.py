@@ -2,7 +2,6 @@ from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 import numpy as np
-import tensorflow as tf
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import KFold, RandomizedSearchCV
 from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score
@@ -53,17 +52,16 @@ def make_predictions(model, X):
 
 def evaluate_model(model, X, y):
     predictions = make_predictions(model, X)
-    mse = mean_squared_error(y, predictions)
+    rmse = np.sqrt(mean_squared_error(y, predictions))
     mae = mean_absolute_error(y_test, predictions)
-    huber = tf.keras.losses.Huber(delta=1.0)
-    huber_loss = huber(y_test, predictions).numpy().mean()
     pearson_corr, p_val = pearsonr(y_test, predictions)
     #QWK
     predictions_rounded = np.round(predictions).astype(int)
     y_test_rounded = np.round(y_test).astype(int)
-    qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic', labels=list(range(10)))
+    max_label = max(np.max(y_test_rounded), np.max(predictions_rounded))
+    qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic', labels=list(range(max_label + 1)))
 
-    return mse, mae, huber_loss, pearson_corr, qwk, predictions
+    return rmse, mae, pearson_corr, qwk, predictions
 
 if __name__ == "__main__":
     # Load and preprocess the data
@@ -72,7 +70,8 @@ if __name__ == "__main__":
     
     #load extracted features from feature_extract.py
     features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
-    #merged_df=pd.merge(data, features, left_index=True, right_index=True)
+    # Scale the score column to be out of 100
+    features['score'] = features['score'] * (100/9)
     
     # Feature engineering
     X = features.drop('score', axis=1)  # Replace 'target_column' with the actual target column name
@@ -96,11 +95,10 @@ if __name__ == "__main__":
         predictions = make_predictions(best_model, X_test)
         
         # Evaluate the model on the testing set
-        mse, mae, huber_loss, pearson_corr, qwk, predictions = evaluate_model(best_model, X_test, y_test)
+        mse, mae, pearson_corr, qwk, predictions = evaluate_model(best_model, X_test, y_test)
         # Append the evaluation scores to the lists
         mse_scores.append(mse)
         mae_scores.append(mae)
-        huber_scores.append(huber_loss)
         pearson_scores.append(pearson_corr)
         qwk_scores.append(qwk)
 
@@ -110,7 +108,7 @@ if __name__ == "__main__":
     average_huber = np.mean(huber_scores)
     average_pearson = np.mean(pearson_scores)
     average_qwk = np.mean(qwk_scores)
-    print(f'Average Mean Squared Error (5-Fold CV): {average_mse}')
+    print(f'Average Root Mean Squared Error (5-Fold CV): {average_mse}')
     print(f'Average Mean Absolute Error (5-Fold CV): {avg_mae}')
     print(f'Average Huber Loss (5-Fold CV): {average_huber}')
     print(f'Average Pearson Correlation (5-Fold CV): {average_pearson}')

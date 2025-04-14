@@ -3,16 +3,10 @@ from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import RandomizedSearchCV, KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score
+from sklearn.metrics import mean_squared_error, cohen_kappa_score
 from scipy.stats import pearsonr
 import pandas as pd
 import numpy as np
-from sentence_transformers import SentenceTransformer
-#import tensorflow as tf
-import warnings
-
-# Suppress all warnings
-warnings.filterwarnings("ignore")
 
 class KernelRegressionModel:
     def __init__(self):
@@ -41,10 +35,9 @@ class KernelRegressionModel:
         """
         Perform hyperparameter tuning using GridSearchCV.
         """
-        #TODO experiment with custom kernels possibly
         #TODO experiment with different regularization techniques
         param_grid = {
-            'kernel_ridge__alpha': [0.1, 1.0, 10.0],
+            'kernel_ridge__alpha': [0.1, 1.0, 5.0, 10.0],
             'kernel_ridge__kernel': ['linear', 'polynomial', 'rbf']
         }
         grid_search = RandomizedSearchCV(self.pipeline, param_grid, cv=5, scoring='neg_mean_squared_error')
@@ -69,26 +62,11 @@ def preprocess_data(data):
     return data
 
 def main():
-    # Load SBERT model
-    sbert_model = SentenceTransformer('all-MiniLM-L6-v2')
-    print("SBERT model loaded successfully.")
-    
-    # Load and preprocess the dataset
-    data = load_data(r'.\data\ielts_data.csv')
-    print("Data loaded successfully.")
-    # Batch encode essays and prompts
-    data['essay_embedding'] = list(sbert_model.encode(data['clean_essay'].astype(str).tolist(), batch_size=32, show_progress_bar=True))
-    data['prompt_embedding'] = list(sbert_model.encode(data['clean_prompt'].astype(str).tolist(), batch_size=32, show_progress_bar=True))
-    data=data[data['essay_embedding', 'prompt_embedding']]
-    print(data)
-    
     #load extracted features from feature_extract.py
     features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
-    merged_df=pd.merge(data, features, left_index=True, right_index=True)
-    print("Merge successful.")
-    
-    # Feature engineering
-    
+    # Scale the score column to be out of 100
+    features['score'] = features['score'] * (100/9)
+        
     # Combine extracted features with embeddings
     X = features.drop(columns=['score'])
     y = features['score']
@@ -99,7 +77,7 @@ def main():
 
     # Perform 5-fold cross-validation
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    mse_scores = []
+    rmse_scores = []
     mae_scores = []
     huber_scores = []
     pearson_scores = []
@@ -115,33 +93,31 @@ def main():
         
         # Make predictions and evaluate
         predictions = kernel_regression_model.predict(X_test)
-        mse = mean_squared_error(y_test, predictions)
-        mse_scores.append(mse)
+        rmse = np.sqrt(mean_squared_error(y_test, predictions))
+        rmse_scores.append(rmse)
         
         # Calculate MAE for this fold
         mae = np.mean(np.abs(predictions - y_test))
         mae_scores.append(mae)
 
         #Calculate other evaluation scores
-        #huber = tf.keras.losses.Huber(delta=1.0)
-        #huber_loss = huber(y_test, predictions).numpy().mean()
-        pearson_corr, p_val = pearsonr(y_test, predictions)
+        pearson_corr = pearsonr(y_test, predictions)
         predictions_rounded = np.round(predictions).astype(int)
         y_test_rounded = np.round(y_test).astype(int)
-        qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic', labels=list(range(10)))
-
+        max_label = max(np.max(y_test_rounded), np.max(predictions_rounded))
+        qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic', labels=list(range(max_label + 1)))
+        
         pearson_scores.append(pearson_corr)
-        #huber_scores.append(huber_loss)
         qwk_scores.append(qwk)
 
 
     # Calculate the average MSE and MAE across all folds
-    average_mse = np.mean(mse_scores)
+    average_rmse = np.mean(rmse_scores)
     average_mae = np.mean(mae_scores)
     average_huber = np.mean(huber_scores)
     average_pearson = np.mean(pearson_scores)
     average_qwk = np.mean(qwk_scores)
-    print(f'Average Mean Squared Error (5-Fold CV): {average_mse}')
+    print(f'Average Root Mean Squared Error (5-Fold CV): {average_rmse}')
     print(f'Average Mean Absolute Error (5-Fold CV): {average_mae}')
     print(f'Average Huber Loss (5-Fold CV): {average_huber}')
     print(f'Average Pearson Correlation (5-Fold CV): {average_pearson}')

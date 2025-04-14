@@ -131,7 +131,6 @@ def main():
     start_time = time.time()
 
     # Load and preprocess data
-    data = preprocess_data(load_data(r'./data/ielts_data.csv'))
     features = preprocess_data(load_data(r'./Extracted Features/extracted_features.csv'))
 
     # Scale the score column to be out of 100

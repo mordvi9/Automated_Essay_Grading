@@ -124,13 +124,9 @@ def evaluate_model(model, X, y):
 
 
 if __name__ == "__main__":
-    # Load and preprocess the data
-    data = load_data(r'./data/ielts_data.csv')
-    data = preprocess_data(data)
-    
     # Load extracted features from feature_extract.py
     features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
-    
+
     # Scale the score column to be out of 100
     features['score'] = features['score'] * (100/9)
     
@@ -149,7 +145,6 @@ if __name__ == "__main__":
     recall_scores = []
 
     n_features = 10  # Number of features to select
-
     for train_index, test_index in kf.split(X):
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
@@ -168,7 +163,7 @@ if __name__ == "__main__":
 
         # Train the final model without early stopping
         regressor.fit(X_train_transformed, y_train)
-        
+
         # Evaluate the model
         rmse, mae, pearson_corr, qwk, precision, recall, predictions = evaluate_model(regressor, X_test_transformed, y_test)
         rmse_scores.append(rmse)
