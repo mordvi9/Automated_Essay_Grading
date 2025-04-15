@@ -52,11 +52,18 @@ class NeuralNetworkPipeline:
         y_train_tensor = torch.tensor(y_train.values, dtype=torch.float32).reshape(-1, 1)
         dataset = TensorDataset(X_train_tensor, y_train_tensor)
         dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
-        #TODO possibly add regularization (early stopping)
 
         input_size = X_train_scaled.shape[1]
-        self.model = NN(input_size=input_size, act = self.act, dropout_rate = self.dropout_rate)
+        self.model = NN(input_size=input_size, act=self.act, dropout_rate=self.dropout_rate)
         self.opt = optim.Adam(self.model.parameters(), lr=self.lr)
+
+        # Add L2 regularization (weight decay)
+        self.opt = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=0.01)
+
+        # Initialize early stopping
+        patience = 10
+        best_loss = float('inf')
+        early_stopping_counter = 0
 
         self.model.train()
         start_time = time.time()
@@ -73,12 +80,22 @@ class NeuralNetworkPipeline:
                 epoch_loss += err.item() * x.size(0)
 
             avg_epoch_loss = epoch_loss / len(dataset)
-            if (epoch + 1) % 10 == 0: 
-                 print(f'Epoch [{epoch+1}/{self.epochs}], Loss: {avg_epoch_loss:.4f}')
+            if (epoch + 1) % 10 == 0:
+                print(f'Epoch [{epoch+1}/{self.epochs}], Loss: {avg_epoch_loss:.4f}')
+
+            # Early stopping
+            if avg_epoch_loss < best_loss:
+                best_loss = avg_epoch_loss
+                early_stopping_counter = 0
+            else:
+                early_stopping_counter += 1
+                if early_stopping_counter >= patience:
+                    print(f'Early stopping at epoch {epoch+1}')
+                    break
 
         end_time = time.time()
         print(f"Training finished in {end_time - start_time:.2f} seconds.")
-        #early stopping if needed
+
 
 
     def predict(self, X_test):
@@ -104,7 +121,7 @@ class NeuralNetworkPipeline:
         Evaluate the model using Mean Squared Error (MSE).
         """
         predictions = self.predict(X_test)
-        mse = np.mean((predictions - y_test) ** 2)
+        rmse = np.sqrt(np.mean((predictions - y_test) ** 2))
         mae = mean_absolute_error(y_test, predictions)
         pearson_corr, p_val = pearsonr(y_test, predictions)
 
@@ -118,10 +135,11 @@ class NeuralNetworkPipeline:
         #QWK
         predictions_rounded = np.round(predictions).astype(int)
         y_test_rounded = np.round(y_test).astype(int)
-        qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic', labels=list(range(10)))
+        unique_labels = np.unique(np.concatenate([y_test_rounded, predictions_rounded]))
+        qwk = cohen_kappa_score(y_test_rounded, predictions_rounded, weights='quadratic', labels=unique_labels)
 
-        return mse, mae, huber_loss, pearson_corr, qwk, predictions
-
+        return rmse, mae, huber_loss, pearson_corr, qwk, predictions
+    
 def load_data(filepath):
     """
     Load the dataset from a CSV file.
@@ -137,21 +155,17 @@ def preprocess_data(data):
     return data
 
 def main():
-    #Load and preprocess data
-    data = load_data(r'./data/ielts_data.csv')
-    data = preprocess_data(data)
-    
     #load extracted features from feature_extract.py
     features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
-    merged_df=pd.merge(data, features, left_index=True, right_index=True)
-    
+    # Scale the score column to be out of 100# Scale the score column to be out of 100
+    features['score'] = features['score'] * (100/9)
     # Feature engineering
     X = features.drop('score', axis=1)  # Replace 'target_column' with the actual target column name
     y = features['score']  # Replace 'target_column' with the actual target column name
 
     # Perform 5-fold cross-validation
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    mse_scores = []
+    rmse_scores = []
     mae_scores = []
     huber_scores = []
     pearson_scores = []
@@ -166,21 +180,21 @@ def main():
         nn_pipeline.fit(X_train, y_train)
 
         # Evaluate the pipeline
-        mse, mae, huber_loss, pearson_corr, qwk, predictions = nn_pipeline.evaluate(X_test, y_test)
-        mse_scores.append(mse)
+        rmse, mae, huber_loss, pearson_corr, qwk, predictions = nn_pipeline.evaluate(X_test, y_test)
+        rmse_scores.append(rmse)
         mae_scores.append(mae)
         huber_scores.append(huber_loss)
         pearson_scores.append(pearson_corr)
         qwk_scores.append(qwk)
 
     # Calculate the average evaluation metrics across all folds
-    average_mse = np.mean(mse_scores)
+    average_rmse = np.mean(rmse_scores)
     average_mae = np.mean(mae_scores)
     average_huber = np.mean(huber_scores)
     average_pearson = np.mean(pearson_scores)
     average_qwk = np.mean(qwk_scores)
 
-    print(f'Average Mean Squared Error (5-Fold CV): {average_mse}')
+    print(f'Average Root Mean Squared Error (5-Fold CV): {average_rmse}')
     print(f'Average Mean Absolute Error (5-Fold CV): {average_mae}')
     print(f'Average Huber Loss (5-Fold CV): {average_huber}')
     print(f'Average Pearson Correlation (5-Fold CV): {average_pearson}')
