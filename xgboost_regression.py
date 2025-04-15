@@ -122,13 +122,34 @@ def evaluate_model(model, X, y):
     recall = recall_score(ground_truth, within_2, average='binary', zero_division=0)
     return rmse, mae, pearson_corr, qwk, precision, recall, predictions
 
+def predict_grade(prompt, essay_file, best_params, n_features):
+    # Load the essay text
+    with open(essay_file, 'r') as f:
+        essay_text = f.read()
 
-def main():
-    #allow optional parameters to test the model with a prompt and essay file
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--prompt", help="The prompt for the essay")
-    parser.add_argument("-e", "--essay_file", help="The essay text file")
-    args = parser.parse_args()
+    # Preprocess the essay text
+    essay_features = preprocess_essay_text(essay_text)
+
+    # Create a pipeline with the best parameters
+    pipeline, regressor = create_pipeline(best_params, n_features)
+
+    # Transform the essay features
+    essay_features_transformed = pipeline.transform(essay_features)
+
+    # Predict the grade
+    predicted_grade = regressor.predict(essay_features_transformed)
+
+    print(f'Predicted grade for prompt "{prompt}" and essay "{essay_file}": {predicted_grade:.2f}')
+    
+def preprocess_essay_text(text):
+    """
+    Preprocess the text by tokenizing, removing stop words, etc.
+    """
+    # Example preprocessing steps (customize as needed):
+    # Tokenization, removing stop words, etc.
+    return text  # Replace with actual preprocessing
+
+def main(args=None):
     # Load extracted features from feature_extract.py
     features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
 
@@ -193,19 +214,16 @@ def main():
     print(f'Average Precision ({folds}-Fold CV): {average_precision}')
     print(f'Average Recall ({folds}-Fold CV): {average_recall}')
     
+    # argparse for command line arguments
+    if args is not None:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-p", "--prompt", help="The prompt for the essay")
+        parser.add_argument("-e", "--essay_file", help="The essay text file")
+        args = parser.parse_args()
+    
     #return a grade if user prompts an essay and prompt
     if args.prompt and args.essay_file:
-        with open(args.essay_file, 'r') as file:
-            essay = file.read()
-        # Extract features from the essay using the pipeline
-        essay_features = pipeline.transform([essay])
-        # Make predictions using the trained model
-        predictions = regressor.predict(essay_features)
-        # Round predictions to the nearest integer
-        predictions_rounded = np.round(predictions).astype(int)
-        # Print the predicted grade
-        print(f"Predicted grade for the essay: {predictions_rounded[0]}")
-        return predictions_rounded[0]
+        predict_grade(args.prompt, args.essay_file, best_params, n_features)
     
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    main()

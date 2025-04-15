@@ -23,4 +23,5 @@ def main():
     print("Model returns following grade: ")
     xgboost_regression(prompt, essay)
     
-    
+if __name__ == "__main__":
+    main()
