@@ -8,7 +8,7 @@ from sklearn.feature_selection import RFE
 from scipy.stats import pearsonr
 import numpy as np
 import optuna
-
+import argparse
 
 def load_data(filepath):
     """
@@ -123,7 +123,12 @@ def evaluate_model(model, X, y):
     return rmse, mae, pearson_corr, qwk, precision, recall, predictions
 
 
-if __name__ == "__main__":
+def main():
+    #allow optional parameters to test the model with a prompt and essay file
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--prompt", help="The prompt for the essay")
+    parser.add_argument("-e", "--essay_file", help="The essay text file")
+    args = parser.parse_args()
     # Load extracted features from feature_extract.py
     features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
 
@@ -187,3 +192,20 @@ if __name__ == "__main__":
     print(f'Average QWK ({folds}-Fold CV): {average_qwk}')
     print(f'Average Precision ({folds}-Fold CV): {average_precision}')
     print(f'Average Recall ({folds}-Fold CV): {average_recall}')
+    
+    #return a grade if user prompts an essay and prompt
+    if args.prompt and args.essay_file:
+        with open(args.essay_file, 'r') as file:
+            essay = file.read()
+        # Extract features from the essay using the pipeline
+        essay_features = pipeline.transform([essay])
+        # Make predictions using the trained model
+        predictions = regressor.predict(essay_features)
+        # Round predictions to the nearest integer
+        predictions_rounded = np.round(predictions).astype(int)
+        # Print the predicted grade
+        print(f"Predicted grade for the essay: {predictions_rounded[0]}")
+        return predictions_rounded[0]
+    
+    if __name__ == "__main__":
+        main()
