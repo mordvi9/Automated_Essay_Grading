@@ -56,9 +56,9 @@ def objective(trial, X_train, y_train, X_test, y_test, n_features):
     params = {
         'n_estimators': trial.suggest_int('n_estimators', 50, 500),
         'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.2),
-        'max_depth': trial.suggest_int('max_depth', 3, 10),
+        'max_depth': trial.suggest_int('max_depth', 3, 12),
         'subsample': trial.suggest_float('subsample', 0.6, 1.0),
-        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
         'gamma': trial.suggest_float('gamma', 0, 10),
         'reg_alpha': trial.suggest_float('reg_alpha', 0, 10),  # L1 regularization
         'reg_lambda': trial.suggest_float('reg_lambda', 0, 10)  # L2 regularization
