@@ -59,7 +59,7 @@ def objective(trial, X_train, y_train, X_test, y_test, n_features):
         'max_depth': trial.suggest_int('max_depth', 3, 10),
         'subsample': trial.suggest_float('subsample', 0.6, 1.0),
         'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
-        'gamma': trial.suggest_float('gamma', 0, 5),
+        'gamma': trial.suggest_float('gamma', 0, 10),
         'reg_alpha': trial.suggest_float('reg_alpha', 0, 10),  # L1 regularization
         'reg_lambda': trial.suggest_float('reg_lambda', 0, 10)  # L2 regularization
     }

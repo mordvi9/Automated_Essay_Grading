@@ -285,8 +285,8 @@ def objective(trial, X, y, cv_folds=3):
     num_layers = trial.suggest_int('num_layers', 1, 3)
     learning_rate = trial.suggest_float('learning_rate', 1e-4, 1e-2, log=True)
     batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128])
-    dropout_rate = trial.suggest_float('dropout_rate', 0.1, 0.5)
-    weight_decay = trial.suggest_float('weight_decay', 1e-5, 1e-2, log=True)
+    dropout_rate = trial.suggest_float('dropout_rate', 0.1, 0.3)
+    weight_decay = trial.suggest_float('weight_decay', 1e-6, 1e-4, log=True)
     
     # Dynamic hidden dimensions
     n_hidden_layers = trial.suggest_int('n_hidden_layers', 1, 4)
