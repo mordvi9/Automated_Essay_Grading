@@ -151,7 +151,7 @@ def preprocess_essay_text(text):
 
 def main(args=None):
     # Load extracted features from feature_extract.py
-    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
+    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features_new.csv'))
 
     # Scale the score column to be out of 100
     features['score'] = features['score'] * (100/9)
@@ -213,6 +213,14 @@ def main(args=None):
     print(f'Average QWK ({folds}-Fold CV): {average_qwk}')
     print(f'Average Precision ({folds}-Fold CV): {average_precision}')
     print(f'Average Recall ({folds}-Fold CV): {average_recall}')
+    
+    with open('xgboost_results.txt', 'w') as f:
+        f.write(f'Average Root Mean Squared Error ({folds}-Fold CV): {average_rmse}\n')
+        f.write(f'Average Mean Absolute Error ({folds}-Fold CV): {average_mae}\n')
+        f.write(f'Average Pearson Correlation ({folds}-Fold CV): {average_pearson}\n')
+        f.write(f'Average QWK ({folds}-Fold CV): {average_qwk}\n')
+        f.write(f'Average Precision ({folds}-Fold CV): {average_precision}\n')
+        f.write(f'Average Recall ({folds}-Fold CV): {average_recall}\n')
     
     # argparse for command line arguments
     if args is not None:

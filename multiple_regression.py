@@ -78,6 +78,7 @@ if __name__ == "__main__":
     y = features['score']  # Replace 'target_column' with the actual target column name
     
     # Perform 5-fold cross-validation
+    folds = 5
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     mse_scores = []
     mae_scores = []
@@ -113,4 +114,12 @@ if __name__ == "__main__":
     print(f'Average Huber Loss (5-Fold CV): {average_huber}')
     print(f'Average Pearson Correlation (5-Fold CV): {average_pearson}')
     print(f'Average QWK (5-Fold CV): {average_qwk}')
+    
+    with open('regression_results.txt', 'w') as f:
+        f.write(f'Average Root Mean Squared Error ({folds}-Fold CV): {average_mse}\n')
+        f.write(f'Average Mean Absolute Error ({folds}-Fold CV): {avg_mae}\n')
+        f.write(f'Average Pearson Correlation ({folds}-Fold CV): {average_pearson}\n')
+        f.write(f'Average QWK ({folds}-Fold CV): {average_qwk}\n')
+        #f.write(f'Average Precision ({folds}-Fold CV): {average_precision}\n')
+        #f.write(f'Average Recall ({folds}-Fold CV): {average_recall}\n')
     
