@@ -69,13 +69,12 @@ if __name__ == "__main__":
     data = preprocess_data(data)
     
     #load extracted features from feature_extract.py
-    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
+    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features_new.csv'))
     # Scale the score column to be out of 100
     features['score'] = features['score'] * (100/9)
     
     # Feature engineering
-    X = features.drop('score', axis=1)  # Replace 'target_column' with the actual target column name
-    y = features['score']  # Replace 'target_column' with the actual target column name
+    X = features.iloc[:, :-5]  # Drops the last 5 columns    y = features['score']  # Replace 'target_column' with the actual target column name
     
     # Perform 5-fold cross-validation
     folds = 5

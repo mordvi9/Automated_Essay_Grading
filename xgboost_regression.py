@@ -3,12 +3,14 @@ from xgboost import XGBRegressor
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score, precision_score, recall_score
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import PowerTransformer, StandardScaler
 from sklearn.feature_selection import RFE
 from scipy.stats import pearsonr
 import numpy as np
 import optuna
 import argparse
+import csv
+
 
 def load_data(filepath):
     """
@@ -157,7 +159,7 @@ def main(args=None):
     features['score'] = features['score'] * (100/9)
     
     # Feature engineering
-    X = features.drop('score', axis=1)  # Replace 'score' with the actual target column name
+    X = features.iloc[:, :-5]  # Drops the last 5 columns
     y = features['score']  # Replace 'score' with the actual target column name
     
     # Perform 5-fold cross-validation
@@ -214,13 +216,28 @@ def main(args=None):
     print(f'Average Precision ({folds}-Fold CV): {average_precision}')
     print(f'Average Recall ({folds}-Fold CV): {average_recall}')
     
-    with open('xgboost_results.txt', 'w') as f:
-        f.write(f'Average Root Mean Squared Error ({folds}-Fold CV): {average_rmse}\n')
-        f.write(f'Average Mean Absolute Error ({folds}-Fold CV): {average_mae}\n')
-        f.write(f'Average Pearson Correlation ({folds}-Fold CV): {average_pearson}\n')
-        f.write(f'Average QWK ({folds}-Fold CV): {average_qwk}\n')
-        f.write(f'Average Precision ({folds}-Fold CV): {average_precision}\n')
-        f.write(f'Average Recall ({folds}-Fold CV): {average_recall}\n')
+
+    # Define the metrics and their corresponding values
+    metrics = [
+        ("Average Root Mean Squared Error", average_rmse),
+        ("Average Mean Absolute Error", average_mae),
+        ("Average Pearson Correlation", average_pearson),
+        ("Average QWK", average_qwk),
+        ("Average Precision", average_precision),
+        ("Average Recall", average_recall)
+    ]
+
+    # Write to CSV
+    with open('xgboost_results.csv', 'w', newline='') as f:
+        writer = csv.writer(f)
+        
+        # Write header
+        writer.writerow(["Metric", "Value"])
+        
+        # Write metric data
+        writer.writerows(metrics)
+
+    print("CSV file saved successfully!")
     
     # argparse for command line arguments
     if args is not None:
