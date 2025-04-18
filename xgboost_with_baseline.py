@@ -15,6 +15,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import cross_val_predict
+from sklearn.neural_network import MLPRegressor 
+import matplotlib.pyplot as plt
+import seaborn as sns
+from transformers import AutoTokenizer, AutoModel
+import torch
+from sklearn.base import BaseEstimator, TransformerMixin
+
 
 def load_data(filepath):
     """
@@ -44,39 +51,6 @@ def preprocess_data(data):
     """
     data = data.dropna()  # Drop rows with missing values
     return data
-
-def text_only_baselines(df):
-    """Baselines using only raw essay text"""
-    X = df['clean_essay']  # Changed from 'clean_essay'
-    y = df['Overall'] * (100/9)  # Changed from 'Overall'
-    
-    models = {
-        'TF-IDF + Ridge': make_pipeline(
-            TfidfVectorizer(max_features=5000, ngram_range=(1,2)),
-            Ridge(alpha=1.0)
-        ),
-        'TF-IDF + RandomForest': make_pipeline(
-            TfidfVectorizer(max_features=5000),
-            RandomForestRegressor(n_estimators=100, max_depth=5, random_state=42)
-        )
-    }
-    
-    results = {}
-    for name, model in models.items():
-        preds = cross_val_predict(model, X, y, cv=5, n_jobs=-1)
-        preds = np.clip(preds, 0, 100)
-        qwk = calculate_qwk(y, preds) 
-        
-        results[name] = {
-            'qwk': qwk,
-            'pred_range': (preds.min(), preds.max()),
-            'corr': np.corrcoef(y, preds)[0,1]
-        }
-        
-        print(f"{name} - QWK: {qwk:.3f}, Corr: {results[name]['corr']:.3f}, "
-              f"Range: {results[name]['pred_range'][0]:.1f}-{results[name]['pred_range'][1]:.1f}")
-        
-    return results
 
 def create_pipeline(params, n_features):
     """
@@ -197,9 +171,117 @@ def preprocess_essay_text(text):
     # Tokenization, removing stop words, etc.
     return text  # Replace with actual preprocessing
 
+
+def feature_ablation_study(features, y, best_params):
+    # Define different feature sets
+    feature_sets = {
+    "All Features": features.iloc[:, :-1],  
+    "Only Linguistic Features": features[['noun_count', 'verb_count', 'adj_count', 'adv_count', 'pronoun_count', 'modal_count','complexity_verb_ratio', 'adj_adv_ratio','num_grammatical_errors','avg_dependency_distance']],
+    "Only Readability Features": features[['avg_sentence_length', 'avg_syllables_per_word', 'flesch_reading_ease','window_repeat_count','unique_word_ratio']],
+    "Only Semantic Features": features[['tfidf_cosine_similarity','sbert_prompt_adherence_similarity','mean_tfidf_score', 'std_tfidf_score','avg_adjacent_sentence_similarity']],
+    "Only Structural Features": features[['contrast_marker_ratio','addition_marker_ratio','cause_effect_marker_ratio','lt_error_count']],
+    "Only Discourse Features": features[['contrast_marker_ratio','addition_marker_ratio','cause_effect_marker_ratio']],
+    "Only Error Features": features[['num_grammatical_errors','lt_error_count']]
+}
+    results = {}
+    for name, X in feature_sets.items():
+        print(f"\nEvaluating with {name}...")
+        kf = KFold(n_splits=5, shuffle=True, random_state=42)
+        qwk_scores = []
+        
+        for train_index, test_index in kf.split(X):
+            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+            
+            pipeline, regressor = create_pipeline(best_params, min(10, X.shape[1]))
+            X_train_transformed = pipeline.fit_transform(X_train, y_train)
+            X_test_transformed = pipeline.transform(X_test)
+            regressor.fit(X_train_transformed, y_train)
+            
+            predictions = regressor.predict(X_test_transformed)
+            qwk_scores.append(calculate_qwk(y_test, predictions))
+        
+        results[name] = np.mean(qwk_scores)
+        print(f"{name} - Average QWK: {results[name]:.3f}")
+    
+    return results
+
+
+def model_ablation_study(X, y, best_params):
+    models = {
+        "XGBoost (Current)": XGBRegressor(**best_params),
+        "Random Forest": RandomForestRegressor(n_estimators=200, max_depth=10),
+        "Linear Regression": Ridge(alpha=1.0),
+        "Neural Network": make_pipeline(
+            StandardScaler(),
+            MLPRegressor(hidden_layer_sizes=(64, 32), early_stopping=True))
+    }
+    
+    results = {}
+    for name, model in models.items():
+        print(f"\nEvaluating {name}...")
+        preds = cross_val_predict(model, X, y, cv=5, n_jobs=-1)
+        qwk = calculate_qwk(y, preds)
+        results[name] = qwk
+        print(f"{name} - QWK: {qwk:.3f}")
+    
+    return results
+
+def plot_ablation_results(results):
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x=list(results.values()), y=list(results.keys()))
+    plt.xlabel('QWK Score')
+    plt.tight_layout()
+    plt.show()
+
+class TransformerFeatures(BaseEstimator, TransformerMixin):
+    def __init__(self, model_name='bert-base-uncased'):
+        self.model_name = model_name  
+        self.tokenizer = None
+        self.model = None
+        
+    def fit(self, X, y=None):
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.model = AutoModel.from_pretrained(self.model_name)
+        return self
+    
+    def transform(self, texts):
+        if not isinstance(texts, pd.Series):
+            texts = pd.Series(texts)
+            
+        inputs = self.tokenizer(texts.tolist(), return_tensors='pt', 
+                              padding=True, truncation=True, max_length=512)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+        return outputs.last_hidden_state[:,0,:].numpy()
+    
+    def get_params(self, deep=True):
+        return {"model_name": self.model_name}
+    
+    def set_params(self, **parameters):
+        for parameter, value in parameters.items():
+            setattr(self, parameter, value)
+        return self
+
+def transformer_baseline(df):
+    X = df['clean_essay']
+    y = df['Overall'] * (100/9)
+    
+    pipeline = make_pipeline(
+        TransformerFeatures(),
+        StandardScaler(),
+        Ridge(alpha=1.0)
+    )
+    
+    preds = cross_val_predict(pipeline, X, y, cv=5, n_jobs=-1)
+    qwk = calculate_qwk(y, preds)
+    
+    print(f"Transformer Baseline - QWK: {qwk:.3f}")
+    return qwk
+
 def main(args=None):
     # Load extracted features from feature_extract.py
-    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features_new.csv'))
+    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
     original_data = pd.read_csv("./data/ielts_data.csv")
     original_data = original_data.dropna()
 
@@ -207,12 +289,11 @@ def main(args=None):
     features['score'] = features['score'] * (100/9)
     
     # Feature engineering
-    X = features.iloc[:, :-5]  # Drops the last 5 columns
-    y = features['score']  # Replace 'score' with the actual target column name
+    X = features.iloc[:, :-1] 
+    scaler = StandardScaler()
+    scaler.fit_transform(X)
+    y = features['score'] 
     
-    print("Running text-only baselines...")
-    baseline_results = text_only_baselines(original_data)
-
     # Perform 5-fold cross-validation
     folds = 5
     kf = KFold(n_splits=folds, shuffle=True, random_state=42)
@@ -266,8 +347,6 @@ def main(args=None):
     print(f'Average QWK ({folds}-Fold CV): {average_qwk}')
     print(f'Average Precision ({folds}-Fold CV): {average_precision}')
     print(f'Average Recall ({folds}-Fold CV): {average_recall}')
-    improvement = average_qwk - max(res['qwk'] for res in baseline_results.values())
-    print(f"Improvement over best baseline: {improvement:.3f}")
 
     # Define the metrics and their corresponding values
     metrics = [
@@ -278,7 +357,7 @@ def main(args=None):
         ("Average Precision", average_precision),
         ("Average Recall", average_recall)
     ]
-
+    """
     # Write to CSV
     with open('xgboost_results.csv', 'w', newline='') as f:
         writer = csv.writer(f)
@@ -301,6 +380,19 @@ def main(args=None):
     #return a grade if user prompts an essay and prompt
     if args.prompt and args.essay_file:
         predict_grade(args.prompt, args.essay_file, best_params, n_features)
-    
+    """
+        # After current evaluation in main()
+    print("\nRunning feature ablation study...")
+    feature_results = feature_ablation_study(features, y, best_params)
+
+    print("\nRunning model ablation study...")
+    model_results = model_ablation_study(X, y, best_params)
+
+    print("\nRunning transformer baseline...")
+    transformer_qwk = transformer_baseline(original_data)
+
+    plot_ablation_results(feature_results)
+    plot_ablation_results(model_results)
+        
 if __name__ == "__main__":
     main()
