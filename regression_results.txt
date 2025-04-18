@@ -1,0 +1,4 @@
+Average Root Mean Squared Error (5-Fold CV): 15.63518325794222
+Average Mean Absolute Error (5-Fold CV): 11.45129041080907
+Average Pearson Correlation (5-Fold CV): 0.390482703980053
+Average QWK (5-Fold CV): 0.3025951372244678
