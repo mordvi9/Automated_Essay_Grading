@@ -76,6 +76,8 @@ if __name__ == "__main__":
     # Feature engineering
     X = features.iloc[:, :-5]  # Drops the last 5 columns    y = features['score']  # Replace 'target_column' with the actual target column name
     
+    y= features['score']
+    
     # Perform 5-fold cross-validation
     folds = 5
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
