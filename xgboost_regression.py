@@ -153,13 +153,13 @@ def preprocess_essay_text(text):
 
 def main(args=None):
     # Load extracted features from feature_extract.py
-    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features_new.csv'))
+    features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
 
     # Scale the score column to be out of 100
     features['score'] = features['score'] * (100/9)
     
     # Feature engineering
-    X = features.iloc[:, :-5]  # Drops the last 5 columns
+    X = features.drop(columns=['score'])
     y = features['score']  # Replace 'score' with the actual target column name
     
     # Perform 5-fold cross-validation
