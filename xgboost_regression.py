@@ -179,7 +179,7 @@ def main(args=None):
         
         # Use Optuna for Bayesian Optimization
         study = optuna.create_study(direction='minimize')
-        study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test, n_features), n_trials=35)
+        study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test, n_features), n_trials=35, n_jobs=-1)
 
         # Get the best parameters and train the final model
         best_params = study.best_params
