@@ -1,7 +1,7 @@
 Metric,Value
-Average Root Mean Squared Error,13.175638720176925
-Average Mean Absolute Error,10.1397197939935
-Average Pearson Correlation,0.5200852039404473
-Average QWK,0.48111872036844333
+Average Root Mean Squared Error,13.128974438438183
+Average Mean Absolute Error,10.110645004399027
+Average Pearson Correlation,0.5230125006944206
+Average QWK,0.48584193790849817
 Average Precision,1.0
-Average Recall,0.20271536183363378
+Average Recall,0.22031129281483391

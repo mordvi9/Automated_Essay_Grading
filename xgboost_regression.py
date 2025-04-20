@@ -3,7 +3,7 @@ from xgboost import XGBRegressor
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score, precision_score, recall_score
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import PowerTransformer, StandardScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import RFE
 from scipy.stats import pearsonr
 import numpy as np
@@ -238,17 +238,6 @@ def main(args=None):
         writer.writerows(metrics)
 
     print("CSV file saved successfully!")
-    
-    # argparse for command line arguments
-    if args is not None:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("-p", "--prompt", help="The prompt for the essay")
-        parser.add_argument("-e", "--essay_file", help="The essay text file")
-        args = parser.parse_args()
-    
-    #return a grade if user prompts an essay and prompt
-    if args.prompt and args.essay_file:
-        predict_grade(args.prompt, args.essay_file, best_params, n_features)
     
 if __name__ == "__main__":
     main()
