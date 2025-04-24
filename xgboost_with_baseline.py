@@ -21,12 +21,36 @@ import seaborn as sns
 from transformers import AutoTokenizer, AutoModel
 import torch
 from sklearn.base import BaseEstimator, TransformerMixin
+from joblib import dump, load
+import os
+from sklearn.model_selection import train_test_split
+import warnings
+
+def save_results(model, pipeline, best_params, metrics, feature_names, filepath="model_results.pkl"):
+    results = {
+        'model': model,
+        'pipeline': pipeline,
+        'best_params': best_params,
+        'metrics': metrics,
+        'feature_names': feature_names,
+    }
+    directory = os.path.dirname(filepath)
+    if directory: 
+        os.makedirs(directory, exist_ok=True)
+    dump(results, filepath)
+    print(f"Results saved to {filepath}")
+
+def load_results(filepath="model_results.pkl"):
+    if os.path.exists(filepath):
+        results = load(filepath)
+        print(f"Results loaded from {filepath}")
+        return results
+    else:
+        print(f"No saved results found at {filepath}")
+        return None
 
 
 def load_data(filepath):
-    """
-    Load the dataset from a CSV file.
-    """
     data = pd.read_csv(filepath)
     return data
 
@@ -68,10 +92,15 @@ def create_pipeline(params, n_features):
         reg_alpha=params['reg_alpha'],  # L1 regularization
         reg_lambda=params['reg_lambda']  # L2 regularization
     )
-    pipeline = Pipeline([
-        ('scaler', StandardScaler()),  # Standardize the features
-        ('feature_selector', RFE(regressor, n_features_to_select=n_features))  # Feature selection
-    ])
+    if n_features is not None:
+        pipeline = Pipeline([
+            ('scaler', StandardScaler()),
+            ('feature_selector', RFE(regressor, n_features_to_select=n_features))
+        ])
+    else:
+        pipeline = Pipeline([
+            ('scaler', StandardScaler())
+        ])
     return pipeline, regressor
 
 
@@ -176,33 +205,39 @@ def feature_ablation_study(features, y, best_params):
     # Define different feature sets
     feature_sets = {
     "All Features": features.iloc[:, :-1],  
-    "Only Linguistic Features": features[['noun_count', 'verb_count', 'adj_count', 'adv_count', 'pronoun_count', 'modal_count','complexity_verb_ratio', 'adj_adv_ratio','num_grammatical_errors','avg_dependency_distance']],
-    "Only Readability Features": features[['avg_sentence_length', 'avg_syllables_per_word', 'flesch_reading_ease','window_repeat_count','unique_word_ratio']],
-    "Only Semantic Features": features[['tfidf_cosine_similarity','sbert_prompt_adherence_similarity','mean_tfidf_score', 'std_tfidf_score','avg_adjacent_sentence_similarity']],
-    "Only Structural Features": features[['contrast_marker_ratio','addition_marker_ratio','cause_effect_marker_ratio','lt_error_count']],
-    "Only Discourse Features": features[['contrast_marker_ratio','addition_marker_ratio','cause_effect_marker_ratio']],
-    "Only Error Features": features[['num_grammatical_errors','lt_error_count']]
+    "Only Linguistic Features": features[['noun_count', 'verb_count', 'adj_count', 'adv_count', 
+                                        'pronoun_count', 'modal_count', 'complexity_verb_ratio', 
+                                        'adj_adv_ratio', 'num_grammatical_errors']],
+    "Only Readability Features": features[['avg_sentence_length', 'avg_syllables_per_word', 
+                                         'flesch_reading_ease', 'unique_word_ratio']],
+    "Only Semantic Features": features[['tfidf_cosine_similarity', 'sbert_prompt_adherence_similarity',
+                                      'mean_tfidf_score', 'std_tfidf_score']],
+    "Only Repetition Features": features[['window_repeat_count']],
+    "Only Error Features": features[['num_grammatical_errors']]
 }
     results = {}
     for name, X in feature_sets.items():
         print(f"\nEvaluating with {name}...")
-        kf = KFold(n_splits=5, shuffle=True, random_state=42)
-        qwk_scores = []
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         
-        for train_index, test_index in kf.split(X):
-            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+        if X.shape[1] == 1:
+            scaler = StandardScaler()
+            X_train_transformed = scaler.fit_transform(X_train.values.reshape(-1, 1))
+            X_test_transformed = scaler.transform(X_test.values.reshape(-1, 1))
             
+            regressor = XGBRegressor(objective='reg:squarederror',random_state=42,**best_params)
+        else:
             pipeline, regressor = create_pipeline(best_params, min(10, X.shape[1]))
+            
             X_train_transformed = pipeline.fit_transform(X_train, y_train)
             X_test_transformed = pipeline.transform(X_test)
-            regressor.fit(X_train_transformed, y_train)
-            
-            predictions = regressor.predict(X_test_transformed)
-            qwk_scores.append(calculate_qwk(y_test, predictions))
         
-        results[name] = np.mean(qwk_scores)
-        print(f"{name} - Average QWK: {results[name]:.3f}")
+        regressor.fit(X_train_transformed, y_train)
+        predictions = regressor.predict(X_test_transformed)
+        qwk = calculate_qwk(y_test, predictions)
+        
+        results[name] = qwk
+        print(f"{name} - QWK: {results[name]:.3f}")
     
     return results
 
@@ -218,21 +253,174 @@ def model_ablation_study(X, y, best_params):
     }
     
     results = {}
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
     for name, model in models.items():
         print(f"\nEvaluating {name}...")
-        preds = cross_val_predict(model, X, y, cv=5, n_jobs=-1)
-        qwk = calculate_qwk(y, preds)
-        results[name] = qwk
+        model.fit(X_train_scaled, y_train)
+        predictions = model.predict(X_test_scaled)
+        qwk = calculate_qwk(y_test, predictions)   
+        results[name] = qwk           
         print(f"{name} - QWK: {qwk:.3f}")
-    
     return results
 
-def plot_ablation_results(results):
-    plt.figure(figsize=(10, 6))
-    sns.barplot(x=list(results.values()), y=list(results.keys()))
+def plot_ablation_bar(results, title="Ablation Study Results", color_palette="viridis"):
+    plt.figure(figsize=(10, 6)) 
+    ax = sns.barplot(x=list(results.values()), y=list(results.keys()), palette="viridis",edgecolor="black")
+    for i, v in enumerate(results.values()):
+        ax.text(v + 0.01, i, f"{v:.3f}", va='center')
+    plt.title(title, fontweight='bold')
     plt.xlabel('QWK Score')
+    plt.grid(axis='x', linestyle='--', alpha=0.4)
     plt.tight_layout()
-    plt.show()
+    plt.show() 
+
+def plot_learning_curves(models, X_train, y_train, X_test, y_test, best_params, n_points=20):
+    plt.figure(figsize=(12, 8), facecolor='#f5f5f5')
+    ax = plt.gca()
+    ax.set_facecolor('#f5f5f5')
+    models = {
+        'XGBoost': XGBRegressor(**best_params),
+        'Random Forest': RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42),
+        'Neural Network': make_pipeline(
+            StandardScaler(),
+            MLPRegressor(
+                hidden_layer_sizes=(64, 32),
+                learning_rate_init=0.001, 
+                max_iter=1000,
+                early_stopping=True,
+                random_state=42
+            )
+        ),
+        'Linear Regression': Ridge(alpha=1.0)
+    }
+    colors = {
+        'XGBoost': '#1f77b4',
+        'Random Forest': '#ff7f0e',
+        'Neural Network': '#2ca02c',
+        'Linear Regression': '#d62728'
+    }
+    for name, model in models.items():
+        train_scores = []
+        val_scores = []
+        train_sizes = []
+        
+        for size in np.logspace(0, 1, num=n_points, base=10):
+            size = int(size/10 * len(X_train))
+            size = max(10, min(size, len(X_train)))  
+            
+            X_subset = X_train[:size]
+            y_subset = y_train[:size]
+            
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                model.fit(X_subset, y_subset)
+            
+            # Calculate QWK instead of RMSE
+            train_pred = model.predict(X_subset)
+            val_pred = model.predict(X_test)
+            
+            train_scores.append(calculate_qwk(y_subset, train_pred))
+            val_scores.append(calculate_qwk(y_test, val_pred))
+            train_sizes.append(size)
+        
+        plt.plot(train_sizes, val_scores, '-',
+                color=colors[name], 
+                linewidth=3, label=f'{name} (Val)')
+        
+        final_qwk = val_scores[-1]
+        plt.annotate(f'{name}: {final_qwk:.3f}',
+                   xy=(0.98, 0.85 - 0.05*list(models.keys()).index(name)),
+                   xycoords='axes fraction',
+                   color=colors[name],
+                   fontsize=11,
+                   ha='right')
+
+    plt.xscale('log')
+    plt.xlabel('Training Examples (log scale)', fontsize=12)
+    plt.ylabel('Quadratic Weighted Kappa (QWK)', fontsize=12)
+    plt.title('Model Learning Curves (QWK Metric)', fontsize=14, pad=20)
+    plt.legend(fontsize=10, framealpha=0.9)
+    
+    plt.ylim(0, 1)
+    plt.grid(True, which='both', linestyle='--', alpha=0.7)
+    
+    plt.tight_layout()
+    plt.savefig('qwk_learning_curves.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_prediction_quality(y_true, y_pred, max_val=9):
+    y_true_orig = y_true * max_val / 100
+    y_pred_orig = y_pred * max_val / 100
+    
+    plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
+    ax = plt.gca()
+    ax.set_facecolor('#f5f5f5')
+    
+    scatter = plt.scatter(y_true_orig, y_pred_orig, alpha=0.6, 
+                         c=np.abs(y_true_orig - y_pred_orig), 
+                         cmap='viridis', s=80)
+    
+    min_val, max_val = min(min(y_true_orig), min(y_pred_orig)), max(max(y_true_orig), max(y_pred_orig))
+    plt.plot([min_val, max_val], [min_val, max_val], 'k--', linewidth=2, alpha=0.7)
+    
+    plt.fill_between([min_val, max_val], [min_val-0.5, max_val-0.5], [min_val+0.5, max_val+0.5], 
+                    color='#2ecc71', alpha=0.15, label='±0.5 points')
+    plt.fill_between([min_val, max_val], [min_val-1, max_val-1], [min_val+1, max_val+1], 
+                    color='#3498db', alpha=0.1, label='±1.0 points')
+    
+    within_half = sum(abs(y_true_orig - y_pred_orig) <= 0.5) / len(y_true)
+    within_one = sum(abs(y_true_orig - y_pred_orig) <= 1.0) / len(y_true)
+    
+    cbar = plt.colorbar(scatter)
+    cbar.set_label('Absolute Error', rotation=270, labelpad=15)
+    
+    plt.title(f'Prediction Accuracy\n{within_half:.1%} within ±0.5, {within_one:.1%} within ±1.0', 
+              fontsize=14, pad=20)
+    plt.xlabel('True Score', fontsize=12)
+    plt.ylabel('Predicted Score', fontsize=12)
+    plt.legend(fontsize=12, framealpha=0.9)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    
+    plt.tight_layout()
+    plt.savefig('prediction_quality.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    return within_half, within_one
+
+def plot_feature_importance(model, feature_names):
+    if not hasattr(model, 'feature_importances_'):
+        print("Model doesn't have feature_importances_ attribute")
+        return
+    
+    importances = model.feature_importances_
+    top_n = len(importances)
+    
+    indices = np.argsort(importances)[-top_n:]
+    
+    plt.figure(figsize=(12, 8), facecolor='#f5f5f5')
+    ax = plt.gca()
+    ax.set_facecolor('#f5f5f5')
+    
+    colors = plt.cm.viridis(np.linspace(0.2, 0.8, top_n))
+    bars = plt.barh(range(top_n), importances[indices], color=colors, alpha=0.8)
+    
+    for i, (v, bar) in enumerate(zip(importances[indices], bars)):
+        plt.text(bar.get_width() + 0.005, i, f"{v:.3f}", 
+                color='black', va='center', fontsize=10)
+    
+    plt.yticks(range(top_n), [feature_names[i] for i in indices], fontsize=11)
+    plt.xlabel('Feature Importance Score', fontsize=12)
+    plt.title(f'Top {top_n} Most Important Features', fontsize=14, pad=20)
+    plt.grid(True, axis='x', linestyle='--', alpha=0.7)
+    
+    plt.tight_layout()
+    plt.savefig('feature_importance.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
 class TransformerFeatures(BaseEstimator, TransformerMixin):
     def __init__(self, model_name='bert-base-uncased'):
@@ -280,119 +468,133 @@ def transformer_baseline(df):
     return qwk
 
 def main(args=None):
-    # Load extracted features from feature_extract.py
     features = preprocess_data(load_data(r'.\Extracted Features\extracted_features.csv'))
     original_data = pd.read_csv("./data/ielts_data.csv")
     original_data = original_data.dropna()
-
-    # Scale the score column to be out of 100
+    
     features['score'] = features['score'] * (100/9)
     
-    # Feature engineering
     X = features.iloc[:, :-1] 
+    y = features['score']
     scaler = StandardScaler()
     scaler.fit_transform(X)
-    y = features['score'] 
     
-    # Perform 5-fold cross-validation
-    folds = 5
-    kf = KFold(n_splits=folds, shuffle=True, random_state=42)
-    rmse_scores = []
-    mae_scores = []
-    pearson_scores = []
-    qwk_scores = []
-    precision_scores = []
-    recall_scores = []
+    saved_results = load_results()
 
-    n_features = 10  # Number of features to select
-    for train_index, test_index in kf.split(X):
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-        
-        # Use Optuna for Bayesian Optimization
-        study = optuna.create_study(direction='minimize')
-        study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test, n_features), n_trials=35)
-
-        # Get the best parameters and train the final model
-        best_params = study.best_params
-        pipeline, regressor = create_pipeline(best_params, n_features)
-
-        # Preprocess the data
-        X_train_transformed = pipeline.fit_transform(X_train, y_train)
-        X_test_transformed = pipeline.transform(X_test)
-
-        # Train the final model without early stopping
-        regressor.fit(X_train_transformed, y_train)
-
-        # Evaluate the model
-        rmse, mae, pearson_corr, qwk, precision, recall, predictions = evaluate_model(regressor, X_test_transformed, y_test)
-        rmse_scores.append(rmse)
-        mae_scores.append(mae)
-        pearson_scores.append(pearson_corr)
-        qwk_scores.append(qwk)
-        precision_scores.append(precision)
-        recall_scores.append(recall)
-
-    # Calculate the average metrics across all folds
-    average_rmse = np.mean(rmse_scores)
-    average_mae = np.mean(mae_scores)
-    average_pearson = np.mean(pearson_scores)
-    average_qwk = np.mean(qwk_scores)
-    average_precision = np.mean(precision_scores)
-    average_recall = np.mean(recall_scores)
-
-    print(f'Average Root Mean Squared Error ({folds}-Fold CV): {average_rmse}')
-    print(f'Average Mean Absolute Error ({folds}-Fold CV): {average_mae}')
-    print(f'Average Pearson Correlation ({folds}-Fold CV): {average_pearson}')
-    print(f'Average QWK ({folds}-Fold CV): {average_qwk}')
-    print(f'Average Precision ({folds}-Fold CV): {average_precision}')
-    print(f'Average Recall ({folds}-Fold CV): {average_recall}')
-
-    # Define the metrics and their corresponding values
-    metrics = [
-        ("Average Root Mean Squared Error", average_rmse),
-        ("Average Mean Absolute Error", average_mae),
-        ("Average Pearson Correlation", average_pearson),
-        ("Average QWK", average_qwk),
-        ("Average Precision", average_precision),
-        ("Average Recall", average_recall)
-    ]
-    """
-    # Write to CSV
-    with open('xgboost_results.csv', 'w', newline='') as f:
-        writer = csv.writer(f)
-        
-        # Write header
-        writer.writerow(["Metric", "Value"])
-        
-        # Write metric data
-        writer.writerows(metrics)
-
-    print("CSV file saved successfully!")
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    # argparse for command line arguments
-    if args is not None:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("-p", "--prompt", help="The prompt for the essay")
-        parser.add_argument("-e", "--essay_file", help="The essay text file")
-        args = parser.parse_args()
-    
-    #return a grade if user prompts an essay and prompt
-    if args.prompt and args.essay_file:
-        predict_grade(args.prompt, args.essay_file, best_params, n_features)
-    """
-        # After current evaluation in main()
+    if saved_results:
+        regressor = saved_results['model']
+        pipeline = saved_results['pipeline']
+        best_params = saved_results['best_params']
+        metrics = saved_results['metrics']
+        feature_names = saved_results['feature_names']
+        
+        print("Using saved model. Metrics:")
+        for name, value in metrics:
+            print(f"{name}: {value:.4f}")
+
+    else:
+        folds = 5
+        kf = KFold(n_splits=folds, shuffle=True, random_state=42)
+        rmse_scores = []
+        mae_scores = []
+        pearson_scores = []
+        qwk_scores = []
+        precision_scores = []
+        recall_scores = []
+
+        n_features = 10  
+        best_params = None 
+
+        for train_index, test_index in kf.split(X):
+            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+            
+            study = optuna.create_study(direction='minimize')
+            study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test, n_features), n_trials=35)
+
+            best_params = study.best_params
+            pipeline, regressor = create_pipeline(best_params, n_features)
+
+            X_train_transformed = pipeline.fit_transform(X_train, y_train)
+            X_test_transformed = pipeline.transform(X_test)
+
+            regressor.fit(X_train_transformed, y_train)
+
+            rmse, mae, pearson_corr, qwk, precision, recall, predictions = evaluate_model(regressor, X_test_transformed, y_test)
+            rmse_scores.append(rmse)
+            mae_scores.append(mae)
+            pearson_scores.append(pearson_corr)
+            qwk_scores.append(qwk)
+            precision_scores.append(precision)
+            recall_scores.append(recall)
+
+        average_rmse = np.mean(rmse_scores)
+        average_mae = np.mean(mae_scores)
+        average_pearson = np.mean(pearson_scores)
+        average_qwk = np.mean(qwk_scores)
+        average_precision = np.mean(precision_scores)
+        average_recall = np.mean(recall_scores)
+
+
+        print(f'Average Root Mean Squared Error ({folds}-Fold CV): {average_rmse}')
+        print(f'Average Mean Absolute Error ({folds}-Fold CV): {average_mae}')
+        print(f'Average Pearson Correlation ({folds}-Fold CV): {average_pearson}')
+        print(f'Average QWK ({folds}-Fold CV): {average_qwk}')
+        print(f'Average Precision ({folds}-Fold CV): {average_precision}')
+        print(f'Average Recall ({folds}-Fold CV): {average_recall}')
+
+        metrics = [
+            ("Average Root Mean Squared Error", average_rmse),
+            ("Average Mean Absolute Error", average_mae),
+            ("Average Pearson Correlation", average_pearson),
+            ("Average QWK", average_qwk),
+            ("Average Precision", average_precision),
+            ("Average Recall", average_recall)
+        ]
+        save_results(regressor, pipeline, best_params, metrics, X.columns.tolist())
+        
     print("\nRunning feature ablation study...")
     feature_results = feature_ablation_study(features, y, best_params)
 
     print("\nRunning model ablation study...")
     model_results = model_ablation_study(X, y, best_params)
+    
+    #print("\nRunning transformer baseline...")
+    #transformer_qwk = transformer_baseline(original_data)
 
-    print("\nRunning transformer baseline...")
-    transformer_qwk = transformer_baseline(original_data)
+    try:
+        X_test_transformed = pipeline.transform(X_test)
+    except ValueError as e:
+        print(f"Error transforming data: {e}")
+        print("Trying to refit the feature selector...")
+        pipeline.fit(X_train, y_train)  
+        X_test_transformed = pipeline.transform(X_test)
+    models = {
+        'XGBoost': XGBRegressor(**best_params),
+        'Random Forest': RandomForestRegressor(n_estimators=200, max_depth=10),
+        'Neural Network': make_pipeline(
+            StandardScaler(),
+            MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=1000)
+        ),
+        'Linear Regression': Ridge(alpha=1.0)
+    }
+    plot_learning_curves(
+        models=models,
+        X_train=X_train,
+        y_train=y_train,
+        X_test=X_test,
+        y_test=y_test,
+        best_params = best_params,
+        n_points=15  
+    )
+    y_pred = regressor.predict(X_test_transformed)
+    plot_prediction_quality(y_test, y_pred)
+    plot_feature_importance(regressor, feature_names)
 
-    plot_ablation_results(feature_results)
-    plot_ablation_results(model_results)
+    plot_ablation_bar(feature_results, title="Feature Ablation Study (QWK)")
+    plot_ablation_bar(model_results, title="Model Comparison (QWK)")
         
 if __name__ == "__main__":
     main()
