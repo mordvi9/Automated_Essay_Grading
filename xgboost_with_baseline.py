@@ -169,8 +169,16 @@ def evaluate_model(model, X, y):
     within_2 = (np.abs(predictions_labels - y_test_labels) <= 2).astype(int)  # 1 if within 2 points, 0 otherwise
     ground_truth = np.ones_like(within_2)  # All true values are "correct" (1)
 
-    precision = precision_score(ground_truth, within_2, average='binary', zero_division=0)
-    recall = recall_score(ground_truth, within_2, average='binary', zero_division=0)
+    within_2 = (np.abs(predictions_labels - y_test_labels) <= 1).astype(int)
+
+    # Calculate true positives, false positives, and false negatives
+    tp = np.sum(within_2[y_test_labels != 0])  # true positives
+    fp = np.sum(within_2[y_test_labels == 0])  # false positives
+    fn = np.sum(1 - within_2[y_test_labels != 0])  # false negatives
+
+    # Calculate precision and recall
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
     return rmse, mae, pearson_corr, qwk, precision, recall, predictions
 
 def predict_grade(prompt, essay_file, best_params, n_features):
