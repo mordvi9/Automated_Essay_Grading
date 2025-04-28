@@ -169,16 +169,8 @@ def evaluate_model(model, X, y):
     within_2 = (np.abs(predictions_labels - y_test_labels) <= 2).astype(int)  # 1 if within 2 points, 0 otherwise
     ground_truth = np.ones_like(within_2)  # All true values are "correct" (1)
 
-    within_2 = (np.abs(predictions_labels - y_test_labels) <= 1).astype(int)
-
-    # Calculate true positives, false positives, and false negatives
-    tp = np.sum(within_2[y_test_labels != 0])  # true positives
-    fp = np.sum(within_2[y_test_labels == 0])  # false positives
-    fn = np.sum(1 - within_2[y_test_labels != 0])  # false negatives
-
-    # Calculate precision and recall
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
+    precision = precision_score(ground_truth, within_2, average='binary', zero_division=0)
+    recall = recall_score(ground_truth, within_2, average='binary', zero_division=0)
     return rmse, mae, pearson_corr, qwk, precision, recall, predictions
 
 def predict_grade(prompt, essay_file, best_params, n_features):
@@ -243,6 +235,8 @@ def feature_ablation_study(features, y, best_params):
         regressor.fit(X_train_transformed, y_train)
         predictions = regressor.predict(X_test_transformed)
         qwk = calculate_qwk(y_test, predictions)
+        
+        
         
         results[name] = qwk
         print(f"{name} - QWK: {results[name]:.3f}")
@@ -520,7 +514,7 @@ def main(args=None):
             y_train, y_test = y.iloc[train_index], y.iloc[test_index]
             
             study = optuna.create_study(direction='minimize')
-            study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test, n_features), n_trials=35, n_jobs=-1)
+            study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test, n_features), n_trials=35)
 
             best_params = study.best_params
             pipeline, regressor = create_pipeline(best_params, n_features)
