@@ -520,7 +520,7 @@ def main(args=None):
             y_train, y_test = y.iloc[train_index], y.iloc[test_index]
             
             study = optuna.create_study(direction='minimize')
-            study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test, n_features), n_trials=35)
+            study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test, n_features), n_trials=35, n_jobs=-1)
 
             best_params = study.best_params
             pipeline, regressor = create_pipeline(best_params, n_features)
