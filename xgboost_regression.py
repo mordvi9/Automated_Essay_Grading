@@ -1,6 +1,6 @@
 import pandas as pd
 from xgboost import XGBRegressor
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error, cohen_kappa_score, precision_score, recall_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -168,9 +168,10 @@ def main(args=None):
     X = features.drop(columns=['score'])
     y = features['score']  # Replace 'score' with the actual target column name
     
-    # Perform 5-fold cross-validation
-    folds = 5
-    kf = KFold(n_splits=folds, shuffle=True, random_state=42)
+    # Perform 80-10-10 train-test-validation split
+    X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_test, X_val, y_test, y_val = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
+
     rmse_scores = []
     mae_scores = []
     pearson_scores = []
@@ -179,35 +180,32 @@ def main(args=None):
     recall_scores = []
 
     n_features = 10  # Number of features to select
-    for train_index, test_index in kf.split(X):
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-        
-        # Use Optuna for Bayesian Optimization
-        study = optuna.create_study(direction='minimize')
-        study.optimize(lambda trial: objective(trial, X_train, y_train, X_test, y_test, n_features), n_trials=35, n_jobs=-1)
 
-        # Get the best parameters and train the final model
-        best_params = study.best_params
-        pipeline, regressor = create_pipeline(best_params, n_features)
+    # Use Optuna for Bayesian Optimization
+    study = optuna.create_study(direction='minimize')
+    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, n_features), n_trials=35, n_jobs=-1)
 
-        # Preprocess the data
-        X_train_transformed = pipeline.fit_transform(X_train, y_train)
-        X_test_transformed = pipeline.transform(X_test)
+    # Get the best parameters and train the final model
+    best_params = study.best_params
+    pipeline, regressor = create_pipeline(best_params, n_features)
 
-        # Train the final model without early stopping
-        regressor.fit(X_train_transformed, y_train)
+    # Preprocess the data
+    X_train_transformed = pipeline.fit_transform(X_train, y_train)
+    X_test_transformed = pipeline.transform(X_test)
 
-        # Evaluate the model
-        rmse, mae, pearson_corr, qwk, precision, recall, predictions = evaluate_model(regressor, X_test_transformed, y_test)
-        rmse_scores.append(rmse)
-        mae_scores.append(mae)
-        pearson_scores.append(pearson_corr)
-        qwk_scores.append(qwk)
-        precision_scores.append(precision)
-        recall_scores.append(recall)
+    # Train the final model without early stopping
+    regressor.fit(X_train_transformed, y_train)
 
-    # Calculate the average metrics across all folds
+    # Evaluate the model
+    rmse, mae, pearson_corr, qwk, precision, recall, predictions = evaluate_model(regressor, X_test_transformed, y_test)
+    rmse_scores.append(rmse)
+    mae_scores.append(mae)
+    pearson_scores.append(pearson_corr)
+    qwk_scores.append(qwk)
+    precision_scores.append(precision)
+    recall_scores.append(recall)
+
+    # Calculate the average metrics
     average_rmse = np.mean(rmse_scores)
     average_mae = np.mean(mae_scores)
     average_pearson = np.mean(pearson_scores)
@@ -215,14 +213,13 @@ def main(args=None):
     average_precision = np.mean(precision_scores)
     average_recall = np.mean(recall_scores)
 
-    print(f'Average Root Mean Squared Error ({folds}-Fold CV): {average_rmse}')
-    print(f'Average Mean Absolute Error ({folds}-Fold CV): {average_mae}')
-    print(f'Average Pearson Correlation ({folds}-Fold CV): {average_pearson}')
-    print(f'Average QWK ({folds}-Fold CV): {average_qwk}')
-    print(f'Average Precision ({folds}-Fold CV): {average_precision}')
-    print(f'Average Recall ({folds}-Fold CV): {average_recall}')
+    print(f'Average Root Mean Squared Error: {average_rmse}')
+    print(f'Average Mean Absolute Error: {average_mae}')
+    print(f'Average Pearson Correlation: {average_pearson}')
+    print(f'Average QWK: {average_qwk}')
+    print(f'Average Precision: {average_precision}')
+    print(f'Average Recall: {average_recall}')
     
-
     # Define the metrics and their corresponding values
     metrics = [
         ("Average Root Mean Squared Error", average_rmse),
