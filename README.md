@@ -10,7 +10,7 @@ Our model achieved a **QWK of 0.49** and **100% accuracy** within a 1.0 score ba
 
 Our final model, an XGBoost regressor on our full feature set, significantly outperforms standard lexical (TF-IDF) and modern semantic (MiniLM Transformers) baselines. Our model's 0.49 QWK improves 227% on the 0.15 QWK achieved by the baselines. This proves the value of task-specific feature engineering for this problem.
 
-![Comparison with Baselines](./assets/baseline_comp.png)
+<img src="./assets/baseline_comp.png" alt="Comparison with Baselines" width="450">
 
 ---
 
