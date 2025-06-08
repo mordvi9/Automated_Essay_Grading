@@ -1,6 +1,0 @@
-Metric,Transformer,BoW
-Average QWK,0.1496,0.1501
-Average Root Mean Squared Error,1.81,1.3642
-Average Mean Absolute Error,1.424,1.0919
-Average Precision,1.0,1.0
-Average Recall,0.3097,0.023
