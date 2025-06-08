@@ -57,8 +57,8 @@ To run this project locally, please follow these steps. The recommended method i
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/mordvi9/Automated_Essay_Grading]
-    cd [Automated_Essay_Grading]
+    git clone https://github.com/mordvi9/Automated_Essay_Grading
+    cd Automated_Essay_Grading
     ```
 2.  **Create the Conda environment from the file:**
     This command will automatically create a new environment named `aes_project` with all the exact dependencies.
@@ -91,6 +91,6 @@ This method should work in most cases but is more sensitive to existing system l
     ```
 4.  **Run the Streamlit app:**
     ```bash
-    streamlit run app.py
+    streamlit run src/app.py
     ```
 ---
