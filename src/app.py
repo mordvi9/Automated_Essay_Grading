@@ -14,7 +14,6 @@ sys.path.append(str(ROOT_DIR / 'src'))
 
 from feature_extractor import load_nlp_models, extract_all_features
 
-
 st.set_page_config(
     page_title="Automated Essay Scorer",
     page_icon="✍️",
@@ -80,12 +79,16 @@ def load_all():
 artifacts, nlp, tokenizer, model = load_all()
 pipeline = artifacts['pipeline']
 regressor = artifacts['regressor']
+if not hasattr(regressor, "gpu_id"):
+    regressor.gpu_id = 0
+if not hasattr(regressor, "predictor"):
+    regressor.predictor = None
 tfidf_vectorizer = artifacts['tfidf_vectorizer']
 training_columns = artifacts['training_columns']
 
 
 with st.sidebar:
-    st.title("✍️ About the Project")
+    st.title("About the Project")
     st.info("This demo uses a regression model to predict essay scores based on the IELTS scoring rubric. "
              "It analyzes linguistic complexity, semantic relevance, and grammatical structure.")
     st.markdown("---")
@@ -99,7 +102,7 @@ with st.sidebar:
     st.link_button("View on GitHub", "https://github.com/mordvi9/Automated_Essay_Grading")
     st.markdown("---")
 
-st.title("📝 Automated Essay Scoring Engine")
+st.title("Automated Essay Scoring Engine")
 st.write("Enter an essay prompt and the corresponding essay below, then click 'Score My Essay' to get an instant evaluation.")
 st.divider()
 
