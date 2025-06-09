@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import joblib
-from pathlib import Path # <--- Import Path
+from pathlib import Path 
 import sys
 
 
@@ -24,16 +24,21 @@ st.set_page_config(
 st.markdown("""
 <style>
     
-    
+    html, body, .block-container {
+        font-size: 22px;         
+    }
+
     /* Main Title */
     h1 {
         color: #1E3A8A; /* Dark Blue */
+        font-size: 2.5rem;
         text-align: center;
         font-weight: bold;
     }
 
     /* Sub-headers */
     h2, h3 {
+        font-size: 2rem;   
         color: #1F2937; /* Dark Gray */
     }
 
@@ -41,7 +46,7 @@ st.markdown("""
     .stTextArea label, .stTextInput label {
         font-weight: bold;
         color: #374151; /* Medium Gray */
-        font-size: 1.1rem;
+        font-size: 1.2rem;
     }
 
     /* Button Styling */
@@ -51,6 +56,7 @@ st.markdown("""
         border-radius: 0.5rem;
         border: none;
         padding: 12px 24px;
+        font-size: 1.1rem;
         font-weight: bold;
         width: 100%;
     }
@@ -103,7 +109,12 @@ with st.sidebar:
     st.markdown("---")
 
 st.title("Automated Essay Scoring Engine")
-st.write("Enter an essay prompt and the corresponding essay below, then click 'Score My Essay' to get an instant evaluation.")
+st.markdown("""
+<div style="text-align: center; margin-bottom: 1rem;">
+  Enter an essay prompt and the corresponding essay below,<br>
+  then click **Score My Essay** to get an instant evaluation.
+</div>
+""", unsafe_allow_html=True)
 st.divider()
 
 # Use columns for a clean side-by-side layout
