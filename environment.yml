@@ -40,3 +40,4 @@ dependencies:
   - tqdm
   - rich
   - requests
+  - **joblib=1.5.1**
