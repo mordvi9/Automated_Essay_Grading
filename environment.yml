@@ -41,3 +41,7 @@ dependencies:
   - rich
   - requests
   - joblib=1.5.1
+
+  - pip:
+    - joblib==1.5.1
+
