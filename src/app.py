@@ -1,9 +1,9 @@
+import torch
 import streamlit as st
 import pandas as pd
-import joblib
+import pickle
 from pathlib import Path 
 import sys
-
 
 try:
     ROOT_DIR = Path(__file__).parent.parent
@@ -74,11 +74,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 @st.cache_resource
 def load_all():
     print("Loading inference artifacts...")
-    artifacts_path = ROOT_DIR / "models" / "aes_full_pipeline_artifacts.pkl"
-    artifacts = joblib.load(artifacts_path)
+    ARTIFACTS_PATH = Path(__file__).parent.parent / "models" / "aes_full_pipeline_artifacts.pkl"
+    with open(ARTIFACTS_PATH, "rb") as f:
+        artifacts = pickle.load(f)
     nlp, bert_tokenizer, bert_model = load_nlp_models()
     return artifacts, nlp, bert_tokenizer, bert_model
 
