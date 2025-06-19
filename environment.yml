@@ -1,7 +1,7 @@
 name: aes_project
 channels:
-  - conda-forge
   - pytorch
+  - conda-forge
   - defaults
 
 dependencies:
