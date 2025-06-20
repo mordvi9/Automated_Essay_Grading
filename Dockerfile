@@ -11,5 +11,9 @@ COPY . .
 
 RUN conda install -n aes_project -c pytorch pytorch=2.5 torchvision=0.20 torchaudio=2.5 --yes && conda clean -afy
 
+ENV PORT=8501
+
 EXPOSE 8501
-ENTRYPOINT ["conda","run","--no-capture-output","-n","aes_project","streamlit","run","src/app.py","--server.port=8501","--server.address=0.0.0.0"]
+
+# Use bash -lc so $PORT is expanded (and defaults to 8501 if unset)
+ENTRYPOINT ["bash","-lc","conda run -n aes_project --no-capture-output streamlit run src/app.py --server.port ${PORT} --server.address 0.0.0.0"]
