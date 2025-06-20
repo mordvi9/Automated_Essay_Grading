@@ -31,3 +31,4 @@ dependencies:
       - tqdm==4.67.1
       - rich==14.0.0
       - requests==2.32.3
+      - dill==0.3.6

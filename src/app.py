@@ -1,9 +1,15 @@
 import torch
 import streamlit as st
 import pandas as pd
-import pickle
+import dill
 from pathlib import Path 
 import sys
+import sklearn.pipeline
+import numpy as np
+
+# Allow pickle to find `Pipeline` in sklearn.pipeline
+sys.modules['Pipeline'] = sklearn.pipeline
+sklearn.pipeline.dtype = np.dtype
 
 try:
     ROOT_DIR = Path(__file__).parent.parent
@@ -80,7 +86,7 @@ def load_all():
     print("Loading inference artifacts...")
     ARTIFACTS_PATH = Path(__file__).parent.parent / "models" / "aes_full_pipeline_artifacts.pkl"
     with open(ARTIFACTS_PATH, "rb") as f:
-        artifacts = pickle.load(f)
+        artifacts = dill.load(f)
     nlp, bert_tokenizer, bert_model = load_nlp_models()
     return artifacts, nlp, bert_tokenizer, bert_model
 
